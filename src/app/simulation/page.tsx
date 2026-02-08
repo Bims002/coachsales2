@@ -121,6 +121,18 @@ export default function SimulationPage() {
                     }
                 });
 
+                // Écouter si le prospect raccroche
+                socket.on('prospect_hangup', () => {
+                    console.log('--- [CLIENT] 📞 Le prospect a raccroché !');
+                    // Arrêter l'enregistrement audio
+                    if (mediaRecorderRef.current) {
+                        mediaRecorderRef.current.stop();
+                        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+                    }
+                    setStatus('idle');
+                    setCurrentTranscript('');
+                });
+
                 socket.on('disconnect', () => {
                     setIsSocketReady(false);
                     setStatus('idle');

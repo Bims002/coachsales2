@@ -34,7 +34,7 @@ export async function synthesizeSpeech(text: string, voiceName: string = 'fr-FR-
             audioConfig: {
                 audioEncoding: 'MP3' as const,
                 sampleRateHertz: 24000,
-                speakingRate: 1.05,  // Légèrement plus rapide, plus naturel
+                speakingRate: 0.95,  // Légèrement plus lent pour une meilleure compréhension
                 pitch: -1.5,         // Voix légèrement plus grave, plus réaliste
                 volumeGainDb: 2.0,   // Un peu plus de volume
             },

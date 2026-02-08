@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import { SimulationManager } from '@/lib/SimulationManager';
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 export const config = {
     api: {
@@ -7,15 +8,17 @@ export const config = {
     },
 };
 
-const SocketHandler = (req: any, res: any) => {
-    if (res.socket.server.io) {
+const SocketHandler = (req: NextApiRequest, res: NextApiResponse) => {
+    // @ts-ignore - accès au serveur socket
+    if (res.socket?.server?.io) {
         console.log('--- [SERVER] Socket déjà initialisé ---');
-        res.end();
+        res.status(200).json({ status: 'Socket already initialized' });
         return;
     }
 
     console.log('--- [SERVER] Initialisation du serveur Socket.IO... ---');
 
+    // @ts-ignore - accès au serveur socket
     const io = new Server(res.socket.server, {
         path: '/api/simulation-socket',
         addTrailingSlash: false,
@@ -52,7 +55,6 @@ const SocketHandler = (req: any, res: any) => {
         socket.on('end_simulation', async () => {
             console.log('--- [SOCKET] 🛑 end_simulation reçu');
             await manager.endSimulationAndScore();
-            // Attendre un peu pour s'assurer que l'événement simulation_complete est envoyé
             await new Promise(resolve => setTimeout(resolve, 500));
             manager.cleanup();
         });
@@ -80,8 +82,9 @@ const SocketHandler = (req: any, res: any) => {
         });
     });
 
+    // @ts-ignore
     res.socket.server.io = io;
-    res.end();
+    res.status(200).json({ status: 'Socket initialized' });
 };
 
 export default SocketHandler;

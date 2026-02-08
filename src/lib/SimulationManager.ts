@@ -151,9 +151,33 @@ Réponds UNIQUEMENT comme un client lambda répondrait à ce que le vendeur vien
         return await generateProspectResponse(this.conversationHistory, contextPrompt);
     }
 
+    // Détecte si le prospect veut raccrocher
+    private isHangupPhrase(text: string): boolean {
+        const hangupPhrases = [
+            'je raccroche',
+            'je vais raccrocher',
+            'au revoir',
+            'bonne journée',
+            'je dois y aller',
+            'je n\'ai pas le temps',
+            'pas intéressé',
+            'ne rappelez plus',
+            'ne m\'appelez plus',
+            'laissez tomber',
+            'ça ne m\'intéresse pas',
+            'merci au revoir',
+            'bye',
+        ];
+        const lowerText = text.toLowerCase();
+        return hangupPhrases.some(phrase => lowerText.includes(phrase));
+    }
+
     private async processModelResponse(text: string) {
         this.isAvatarSpeaking = true;
         this.conversationHistory.push({ role: 'assistant', content: text });
+
+        // Vérifier si le prospect veut raccrocher
+        const shouldHangup = this.isHangupPhrase(text);
 
         try {
             console.log('--- [MANAGER] 🔊 Synthèse vocale en cours...');
@@ -165,12 +189,20 @@ Réponds UNIQUEMENT comme un client lambda répondrait à ce que le vendeur vien
 
             console.log(`--- [MANAGER] ⏱️ Micro verrouillé pour ${lockTime.toFixed(0)}ms`);
 
-            setTimeout(() => {
+            setTimeout(async () => {
                 this.isAvatarSpeaking = false;
                 this.isProcessing = false;
-                console.log('--- [MANAGER] ✅ Micro déverrouillé, prêt pour le tour suivant');
-                if (this.sttManager) {
-                    this.sttManager.resume();
+
+                // Si le prospect a annoncé qu'il raccroche, terminer la simulation
+                if (shouldHangup) {
+                    console.log('--- [MANAGER] 📞 Le prospect raccroche !');
+                    this.socket.emit('prospect_hangup', { message: 'Le prospect a raccroché' });
+                    await this.endSimulationAndScore();
+                } else {
+                    console.log('--- [MANAGER] ✅ Micro déverrouillé, prêt pour le tour suivant');
+                    if (this.sttManager) {
+                        this.sttManager.resume();
+                    }
                 }
             }, lockTime);
 
@@ -178,6 +210,7 @@ Réponds UNIQUEMENT comme un client lambda répondrait à ce que le vendeur vien
             console.error('--- [MANAGER] ❌ Erreur TTS:', e);
             this.isAvatarSpeaking = false;
             this.isProcessing = false;
+
         }
     }
 
