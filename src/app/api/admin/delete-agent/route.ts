@@ -1,9 +1,22 @@
 import { createClient } from '@/lib/supabase-server';
 import { createAdminClient } from '@/lib/supabase-admin';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit, RateLimitPresets } from '@/lib/rate-limit';
+import { z } from 'zod';
 
-export async function DELETE(request: Request) {
+// Schéma de validation pour l'ID
+const deleteAgentSchema = z.object({
+    id: z.string().uuid('ID invalide'),
+});
+
+export async function DELETE(request: NextRequest) {
     try {
+        // Rate limiting : 10 requêtes par minute
+        const rateLimitResponse = rateLimit(request, RateLimitPresets.STRICT);
+        if (rateLimitResponse) {
+            return rateLimitResponse;
+        }
+
         const supabase = await createClient();
 
         // 1. Vérifier la session de l'administrateur
@@ -23,22 +36,32 @@ export async function DELETE(request: Request) {
             return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 });
         }
 
-        // 3. Récupérer l'ID de l'agent à supprimer
+        // 3. Récupérer et valider l'ID de l'agent à supprimer
         const { searchParams } = new URL(request.url);
         const agentId = searchParams.get('id');
 
-        if (!agentId) {
-            return NextResponse.json({ error: 'ID de l\'agent manquant' }, { status: 400 });
+        // Validation avec Zod
+        const validationResult = deleteAgentSchema.safeParse({ id: agentId });
+        if (!validationResult.success) {
+            return NextResponse.json({
+                error: 'ID invalide',
+                details: validationResult.error.issues.map((issue) => ({
+                    field: issue.path.join('.'),
+                    message: issue.message
+                }))
+            }, { status: 400 });
         }
 
-        // Empêcher l'admin de se supprimer lui-même via cette route par précaution
-        if (agentId === session.user.id) {
+        const validatedId = validationResult.data.id;
+
+        // Empêcher l'admin de se supprimer lui-même
+        if (validatedId === session.user.id) {
             return NextResponse.json({ error: 'Vous ne pouvez pas vous supprimer vous-même' }, { status: 400 });
         }
 
         // 4. Supprimer l'utilisateur via l'API Admin
         const adminClient = createAdminClient();
-        const { error } = await adminClient.auth.admin.deleteUser(agentId);
+        const { error } = await adminClient.auth.admin.deleteUser(validatedId);
 
         if (error) {
             console.error('Erreur suppression agent:', error);
