@@ -5,7 +5,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import { Mic, LogOut, User, ChevronDown, LayoutDashboard, Play, History, Package, Users } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase-browser';
 
 export default function Header() {
     const { user, profile, isAdmin, signOut, loading } = useAuth();
