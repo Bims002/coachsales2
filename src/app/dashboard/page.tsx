@@ -116,7 +116,7 @@ export default function AgentDashboard() {
                         <h1 className="text-2xl font-bold mb-2" style={{ color: 'white' }}>
                             Bonjour, {profile?.name || user?.email?.split('@')[0]} 👋
                         </h1>
-                        <p className="opacity-90">
+                        <p className="opacity-90" style={{ color: 'white' }}>
                             Prêt pour votre prochaine simulation de vente ?
                         </p>
                     </div>
