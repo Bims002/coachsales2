@@ -42,7 +42,7 @@ export function rateLimit(
     config: RateLimitConfig
 ): NextResponse | null {
     // Identifier l'utilisateur par IP
-    const identifier = request.ip || request.headers.get('x-forwarded-for') || 'unknown';
+    const identifier = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
     const key = `${identifier}:${request.nextUrl.pathname}`;
 
     const now = Date.now();
