@@ -26,7 +26,7 @@ export default function RootLayout({
           </main>
           <footer className="py-8 text-center text-sm border-t" style={{ color: 'var(--color-text-disabled)', borderColor: 'var(--color-gray-30)' }}>
             <div className="fluent-container" style={{ padding: 0 }}>
-              © {new Date().getFullYear()} - CoachSales AI. Tous droits réservés.
+              © {new Date().getFullYear()} - CoachSales. Tous droits réservés.
             </div>
           </footer>
         </AuthProvider>
