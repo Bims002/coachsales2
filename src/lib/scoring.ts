@@ -1,6 +1,8 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY || "",
+});
 
 export interface ScoringResult {
     score: number;
@@ -13,8 +15,6 @@ export async function calculateScore(
     transcript: Array<{ role: string; content: string }>,
     productContext: string
 ): Promise<ScoringResult> {
-
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const conversationText = transcript
         .map(t => `${t.role === 'user' ? 'AGENT' : 'PROSPECT'}: ${t.content}`)
@@ -43,12 +43,23 @@ CRITÈRES DE NOTATION:
 - Conclusion et appel à l'action (10%)`;
 
     try {
-        const result = await model.generateContent(prompt);
-        const text = result.response.text().trim();
+        console.log('[SCORING] Calcul du score avec Groq...');
+
+        const completion = await groq.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages: [
+                { role: "user", content: prompt }
+            ],
+            temperature: 0.3,
+            max_tokens: 1024,
+        });
+
+        const text = completion.choices[0]?.message?.content?.trim() || "";
 
         // Nettoyer le JSON (enlever les backticks markdown si présents)
         const cleanJson = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
+        console.log('[SCORING] Score calculé avec succès');
         return JSON.parse(cleanJson);
     } catch (error) {
         console.error('[SCORING] Erreur:', error);

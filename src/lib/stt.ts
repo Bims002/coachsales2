@@ -54,8 +54,6 @@ export class SpeechToTextManager {
                     this.stop();
                 })
                 .on('data', (data: any) => {
-                    if (this.isFinalized) return;
-
                     const result = data.results[0];
                     if (result && result.alternatives[0]) {
                         const transcript = result.alternatives[0].transcript.trim();
@@ -97,6 +95,13 @@ export class SpeechToTextManager {
         } catch (e) {
             console.error('--- [STT] ❌ Erreur fatale init:', e);
         }
+    }
+
+    resume() {
+        console.log('--- [STT] 🔄 Reprise de l\'écoute');
+        this.isFinalized = false;
+        this.lastTranscript = "";
+        this.hasSpoken = false;
     }
 
     private finalize(transcript: string) {

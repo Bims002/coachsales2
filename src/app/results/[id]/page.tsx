@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Trophy, TrendingUp, Clock, ArrowLeft, MessageSquare, Play, History, Loader2 } from 'lucide-react';
+import { Trophy, TrendingUp, Clock, ArrowLeft, MessageSquare, Play, History, Loader2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { createClient } from '@/lib/supabase-browser';
 
 interface SimulationResult {
@@ -14,6 +14,8 @@ interface SimulationResult {
     duration_seconds: number;
     created_at: string;
     products?: { name: string } | { name: string }[] | null;
+    strengths?: string[];
+    improvements?: string[];
 }
 
 function getProductName(products?: { name: string } | { name: string }[] | null): string {
@@ -175,6 +177,49 @@ export default function ResultsPage() {
                 <p style={{ color: 'var(--color-text-secondary)', lineHeight: 1.7 }}>
                     {result.feedback || "Analyse en cours..."}
                 </p>
+            </div>
+
+            {/* Points forts et Axes d'amélioration */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {/* Points forts */}
+                <div className="fluent-card" style={{ borderLeft: '4px solid var(--color-success)' }}>
+                    <div className="flex items-center gap-2 mb-4">
+                        <ThumbsUp className="w-5 h-5" style={{ color: 'var(--color-success)' }} />
+                        <h3>Points forts</h3>
+                    </div>
+                    <ul className="space-y-2">
+                        {(result.strengths && result.strengths.length > 0) ? (
+                            result.strengths.slice(0, 2).map((strength, i) => (
+                                <li key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                                    <span style={{ color: 'var(--color-success)' }}>✓</span>
+                                    {strength}
+                                </li>
+                            ))
+                        ) : (
+                            <li className="text-sm" style={{ color: 'var(--color-text-disabled)' }}>Aucun point fort identifié</li>
+                        )}
+                    </ul>
+                </div>
+
+                {/* Axes d'amélioration */}
+                <div className="fluent-card" style={{ borderLeft: '4px solid var(--color-warning)' }}>
+                    <div className="flex items-center gap-2 mb-4">
+                        <ThumbsDown className="w-5 h-5" style={{ color: 'var(--color-warning)' }} />
+                        <h3>Axes d'amélioration</h3>
+                    </div>
+                    <ul className="space-y-2">
+                        {(result.improvements && result.improvements.length > 0) ? (
+                            result.improvements.slice(0, 2).map((improvement, i) => (
+                                <li key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                                    <span style={{ color: 'var(--color-warning)' }}>→</span>
+                                    {improvement}
+                                </li>
+                            ))
+                        ) : (
+                            <li className="text-sm" style={{ color: 'var(--color-text-disabled)' }}>Aucun axe identifié</li>
+                        )}
+                    </ul>
+                </div>
             </div>
 
             {/* Transcript */}

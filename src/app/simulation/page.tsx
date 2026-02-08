@@ -13,6 +13,7 @@ interface Product {
     name: string;
     description: string;
     difficulty: number;
+    objections?: string[];
 }
 
 interface SimulationResult {
@@ -54,6 +55,11 @@ export default function SimulationPage() {
         fetchProducts();
     }, []);
 
+    const userRef = useRef(user);
+    useEffect(() => {
+        userRef.current = user;
+    }, [user]);
+
     useEffect(() => {
         if (socketInitialized.current) return;
         socketInitialized.current = true;
@@ -76,19 +82,42 @@ export default function SimulationPage() {
                 });
 
                 socket.on('simulation_complete', async (result: SimulationResult) => {
-                    if (user) {
+                    console.log('--- [CLIENT] 📊 Résultat reçu du serveur:', result);
+
+                    // Utiliser userRef ou tenter de récupérer la session Supabase en direct
+                    let currentUser = userRef.current;
+
+                    if (!currentUser) {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        currentUser = session?.user || null;
+                    }
+
+                    if (currentUser) {
+                        console.log('--- [CLIENT] 💾 Sauvegarde dans Supabase pour user:', currentUser.id);
                         const { data, error } = await supabase.from('simulations').insert({
-                            user_id: user.id,
+                            user_id: currentUser.id,
                             product_id: result.product_id || null,
                             transcript: result.transcript,
                             score: result.score,
                             feedback: result.feedback,
                             duration_seconds: result.duration_seconds,
+                            strengths: result.strengths || [],
+                            improvements: result.improvements || [],
                         }).select().single();
 
+                        if (error) {
+                            console.error('--- [CLIENT] ❌ Erreur sauvegarde Supabase:', error);
+                            alert("Erreur lors de la sauvegarde du résultat : " + error.message);
+                        }
+
                         if (data) {
+                            console.log('--- [CLIENT] ✅ Sauvegarde réussie, redirection vers:', `/results/${data.id}`);
                             router.push(`/results/${data.id}`);
                         }
+                    } else {
+                        console.warn('--- [CLIENT] ⚠️ Pas d\'utilisateur connecté (même après vérification session), impossible de sauvegarder');
+                        // Option de secours: Rediriger vers l'historique si on ne peut pas sauvegarder ici
+                        alert("Simulation terminée mais session introuvable. Veuillez consulter votre historique.");
                     }
                 });
 
@@ -196,6 +225,7 @@ export default function SimulationPage() {
             socketRef.current.emit('start_simulation', {
                 productId: selectedProduct,
                 productContext: product?.description || product?.name || '',
+                objections: product?.objections || [],
                 userId: user?.id || '',
             });
 

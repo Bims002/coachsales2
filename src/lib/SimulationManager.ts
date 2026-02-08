@@ -6,6 +6,7 @@ import { calculateScore, ScoringResult } from './scoring';
 interface SimulationConfig {
     productId: string;
     productContext: string;
+    objections?: string[];
     userId?: string;
 }
 
@@ -15,6 +16,7 @@ export class SimulationManager {
     private productContext: string = "";
     private productId: string = "";
     private userId: string = "";
+    private objections: string[] = [];
     private sttManager: SpeechToTextManager | null = null;
     private isAvatarSpeaking = false;
     private isProcessing = false;
@@ -33,6 +35,7 @@ export class SimulationManager {
         this.productContext = config.productContext || '';
         this.productId = config.productId || '';
         this.userId = config.userId || '';
+        this.objections = config.objections || [];
         this.conversationHistory = [];
         this.isAvatarSpeaking = false;
         this.isProcessing = false;
@@ -84,19 +87,12 @@ export class SimulationManager {
         this.isProcessing = true;
         this.turnCount++;
 
-        if (this.sttManager) {
-            console.log('--- [MANAGER] 🛑 Fermeture du micro');
-            this.sttManager.stop();
-            this.sttManager = null;
-            this.sttStarted = false;
-        }
-
         this.conversationHistory.push({ role: 'user', content: text });
 
         try {
-            console.log('--- [MANAGER] 🤖 Consultation de Gemini...');
+            console.log('--- [MANAGER] 🤖 Consultation de Groq...');
             const aiResponse = await this.generateNaturalResponse();
-            console.log(`--- [MANAGER] 🤖 Gemini a répondu: "${aiResponse}"`);
+            console.log(`--- [MANAGER] 🤖 Groq a répondu: "${aiResponse}"`);
             await this.processModelResponse(aiResponse);
         } catch (err) {
             console.error('--- [MANAGER] ❌ Erreur critique IA:', err);
@@ -106,12 +102,51 @@ export class SimulationManager {
     }
 
     private async generateNaturalResponse(): Promise<string> {
-        let contextPrompt = `Tu es un prospect au téléphone. 
-CONTEXTE: Tu es sollicité pour ${this.productContext}.
-RÈGLES:
-- 1 seule phrase courte.
-- Ton naturel.
-- Tour actuel: ${this.turnCount}.`;
+        // Varier la personnalité selon le tour
+        const personalities = [
+            'Tu es légèrement sceptique mais poli.',
+            'Tu es occupé et pressé de raccrocher.',
+            'Tu es curieux et poses des questions.',
+            'Tu compares avec ce que tu as déjà.',
+            'Tu cherches à savoir le prix.',
+        ];
+        const personality = personalities[this.turnCount % personalities.length];
+
+        // Sélectionner une objection aléatoire si disponible
+        let objectionInstruction = '';
+        if (this.objections.length > 0 && this.turnCount >= 2 && this.turnCount <= 3) {
+            const randomObjection = this.objections[Math.floor(Math.random() * this.objections.length)];
+            objectionInstruction = `\n\n🚫 OBJECTION À UTILISER CE TOUR (reformule-la naturellement):\n"${randomObjection}"`;
+        }
+
+        let contextPrompt = `Tu es un particulier lambda qui reçoit un appel commercial sur son téléphone. Tu n'attendais pas cet appel.
+
+🎭 TON ÉTAT D'ESPRIT CE TOUR: ${personality}
+
+📞 CE QU'ON ESSAIE DE TE VENDRE: ${this.productContext}${objectionInstruction}
+
+⚠️ RÈGLES STRICTES:
+1. Tu es le CLIENT qui reçoit l'appel, PAS le vendeur.
+2. Réponds en UNE SEULE phrase courte (max 15 mots).
+3. Utilise un langage ORAL naturel : "Euh...", "Hmm...", "Ah bon ?", "Ouais", "Ok", "D'accord", etc.
+4. Sois réaliste : tu peux être méfiant, curieux, ou agacé comme un vrai prospect.
+5. Ne répète JAMAIS les mêmes réponses.
+6. Tour actuel: ${this.turnCount} (si > 7, commence à vouloir raccrocher ou conclure)
+
+❌ NE DIS JAMAIS:
+- "Je vous propose..."
+- "Notre offre..."
+- "Laissez-moi vous expliquer..."
+(Ce sont des phrases de VENDEUR)
+
+✅ EXEMPLES DE BONNES RÉPONSES:
+- "Hmm, c'est combien ça ?"
+- "Ouais mais j'ai déjà quelque chose..."
+- "Ah ok. Et y'a un engagement ?"
+- "Écoutez, là je suis occupé..."
+- "C'est quoi votre offre exactement ?"
+
+Réponds UNIQUEMENT comme un client lambda répondrait à ce que le vendeur vient de dire.`;
 
         return await generateProspectResponse(this.conversationHistory, contextPrompt);
     }
@@ -134,6 +169,9 @@ RÈGLES:
                 this.isAvatarSpeaking = false;
                 this.isProcessing = false;
                 console.log('--- [MANAGER] ✅ Micro déverrouillé, prêt pour le tour suivant');
+                if (this.sttManager) {
+                    this.sttManager.resume();
+                }
             }, lockTime);
 
         } catch (e) {
@@ -172,6 +210,7 @@ RÈGLES:
                 improvements: result.improvements,
             });
 
+            console.log('--- [MANAGER] 📤 Événement simulation_complete envoyé au client');
             console.log('--- [MANAGER] ✅ Score calculé:', result.score);
             return result;
         } catch (e) {

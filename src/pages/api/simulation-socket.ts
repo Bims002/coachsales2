@@ -36,6 +36,7 @@ const SocketHandler = (req: any, res: any) => {
                 await manager.startSimulation({
                     productId: config.productId || '',
                     productContext: config.productContext || '',
+                    objections: config.objections || [],
                     userId: config.userId || '',
                 });
                 console.log('--- [SOCKET] Simulation lancée avec succès');
@@ -51,6 +52,8 @@ const SocketHandler = (req: any, res: any) => {
         socket.on('end_simulation', async () => {
             console.log('--- [SOCKET] 🛑 end_simulation reçu');
             await manager.endSimulationAndScore();
+            // Attendre un peu pour s'assurer que l'événement simulation_complete est envoyé
+            await new Promise(resolve => setTimeout(resolve, 500));
             manager.cleanup();
         });
 

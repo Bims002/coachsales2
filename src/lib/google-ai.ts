@@ -15,18 +15,28 @@ export const speechClient = new SpeechClient({ credentials });
 export const ttsClient = new TextToSpeechClient({ credentials });
 
 /**
- * Convertit du texte en audio (Buffer) en utilisant les voix Studio de haute qualité.
+ * Convertit du texte en audio (Buffer) en utilisant les voix Neural2 de haute qualité.
+ * Voix disponibles pour fr-FR:
+ * - fr-FR-Neural2-A (femme)
+ * - fr-FR-Neural2-B (homme)
+ * - fr-FR-Neural2-C (femme)
+ * - fr-FR-Neural2-D (homme)
+ * - fr-FR-Neural2-E (femme)
  */
-export async function synthesizeSpeech(text: string, voiceName: string = 'fr-FR-Wavenet-D') {
+export async function synthesizeSpeech(text: string, voiceName: string = 'fr-FR-Neural2-B') {
     try {
         const request = {
             input: { text },
-            voice: { languageCode: 'fr-FR', name: voiceName },
+            voice: {
+                languageCode: 'fr-FR',
+                name: voiceName,
+            },
             audioConfig: {
                 audioEncoding: 'MP3' as const,
                 sampleRateHertz: 24000,
-                speakingRate: 1.0,
-                pitch: 0.0
+                speakingRate: 1.05,  // Légèrement plus rapide, plus naturel
+                pitch: -1.5,         // Voix légèrement plus grave, plus réaliste
+                volumeGainDb: 2.0,   // Un peu plus de volume
             },
         };
 

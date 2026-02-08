@@ -1,58 +1,46 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "");
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY || "",
+});
 
 export async function generateProspectResponse(
     conversationHistory: Array<{ role: string; content: string }>,
     systemPrompt: string
 ) {
     try {
-        console.log('--- [DEBUG] Initialisation du modèle gemini-2.0-flash');
+        console.log('--- [DEBUG] Initialisation de Groq avec Llama 3.3 70B');
 
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
-            generationConfig: {
-                temperature: 0.9,
-                maxOutputTokens: 8192,
-            },
-        });
+        // Convertir l'historique au format Groq/OpenAI
+        const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+            { role: "system", content: systemPrompt }
+        ];
 
-        // Gemini requiert que l'historique commence par un message 'user'.
-        // Si l'historique est vide ou commence par 'model', on ajoute une instruction système discrète.
-        let history = conversationHistory.slice(0, -1).map(msg => ({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: [{ text: msg.content }],
-        }));
-
-        if (history.length > 0 && history[0].role === 'model') {
-            history.unshift({
-                role: 'user',
-                parts: [{ text: "[L'appel commence]" }]
+        for (const msg of conversationHistory) {
+            messages.push({
+                role: msg.role === 'user' ? 'user' : 'assistant',
+                content: msg.content
             });
         }
 
-        console.log('--- [DEBUG] Démarrage du chat avec Gemini');
+        console.log('--- [AI] Envoi du message à Groq Llama 3.3 70B...');
 
-        const chat = model.startChat({
-            history,
-            systemInstruction: {
-                role: 'system',
-                parts: [{ text: systemPrompt }]
-            },
+        const completion = await groq.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages,
+            temperature: 0.9,
+            max_tokens: 1024,
         });
 
-        const lastMessage = conversationHistory[conversationHistory.length - 1].content;
+        const response = completion.choices[0]?.message?.content || "";
+        console.log('--- [AI] Réponse reçue de Groq');
 
-        console.log('--- [AI] Envoi du message à Gemini 2.5 Flash...');
-        const result = await chat.sendMessage(lastMessage);
-
-        return result.response.text();
+        return response;
 
     } catch (error: any) {
-        console.error('--- [GEMINI ERROR] Détails:', {
+        console.error('--- [GROQ ERROR] Détails:', {
             status: error.status,
             message: error.message,
-            statusText: error.statusText,
         });
         throw error;
     }
