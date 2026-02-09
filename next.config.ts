@@ -47,12 +47,13 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Next.js nécessite unsafe-eval et unsafe-inline
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.googletagmanager.com https://static.hotjar.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: https:",
-              "connect-src 'self' https://*.supabase.co https://*.google.com wss://*.supabase.co",
+              "connect-src 'self' https://*.supabase.co https://*.google.com wss://*.supabase.co https://*.hotjar.com https://*.hotjar.io wss://*.hotjar.com https://www.google-analytics.com",
               "media-src 'self' blob:",
+              "frame-src 'self' https://vars.hotjar.com",
               "frame-ancestors 'none'",
             ].join('; '),
           },
