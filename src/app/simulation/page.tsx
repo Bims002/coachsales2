@@ -303,10 +303,20 @@ export default function SimulationPage() {
                     formData.append('resistance', product?.resistance || 'Moyen');
 
                     try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 15000); // Timeout 15s
+
                         const res = await fetch('/api/simulation/audio', {
                             method: 'POST',
-                            body: formData
+                            body: formData,
+                            signal: controller.signal
                         });
+                        clearTimeout(timeoutId);
+
+                        if (!res.ok) {
+                            throw new Error(`Erreur serveur: ${res.status}`);
+                        }
+
                         const resData = await res.json();
 
                         if (resData.success && resData.transcript && resData.audio) {
@@ -333,8 +343,13 @@ export default function SimulationPage() {
                         } else if (resData.message === 'No speech detected') {
                             console.log('--- [CLIENT] 💨 Aucun silence détecté dans ce segment');
                         }
-                    } catch (err) {
-                        console.error('--- [CLIENT] ❌ Erreur segment audio:', err);
+                    } catch (err: any) {
+                        if (err.name === 'AbortError') {
+                            console.error('--- [CLIENT] ⏱️ Timeout requête audio (15s)');
+                        } else {
+                            console.error('--- [CLIENT] ❌ Erreur segment audio:', err);
+                        }
+                        // Pas d'alerte bloquante pour ne pas casser le flow, mais on log
                     } finally {
                         isProcessing = false;
                     }
