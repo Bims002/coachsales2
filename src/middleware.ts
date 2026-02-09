@@ -34,52 +34,39 @@ export async function middleware(request: NextRequest) {
         }
     );
 
-    const { data: { session } } = await supabase.auth.getSession();
-
     // Routes publiques (pas besoin d'être connecté)
     const publicRoutes = ['/login', '/register', '/test'];
     const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname.startsWith(route));
+    const isAdminRoute = request.nextUrl.pathname.startsWith('/admin');
+
+    // Récupérer la session UNE SEULE FOIS
+    const { data: { session } } = await supabase.auth.getSession();
 
     // Si non connecté et route protégée → redirection vers login
     if (!session && !isPublicRoute) {
-        const loginUrl = new URL('/login', request.url);
-        return NextResponse.redirect(loginUrl);
+        return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // Si connecté et sur page login/register → redirection vers dashboard approprié
-    if (session && isPublicRoute) {
-        // Récupérer le rôle pour rediriger vers le bon dashboard
+    // Si connecté, on a besoin du rôle seulement pour les routes publiques (redirection) ou admin (protection)
+    if (session && (isPublicRoute || isAdminRoute)) {
+        // Récupérer le rôle UNE SEULE FOIS si nécessaire
         const { data: profile } = await supabase
             .from('profiles')
             .select('role')
             .eq('id', session.user.id)
             .single();
 
-        const dashboardUrl = profile?.role?.toLowerCase() === 'admin'
-            ? new URL('/admin', request.url)
-            : new URL('/dashboard', request.url);
-        return NextResponse.redirect(dashboardUrl);
-    }
+        const userRole = profile?.role?.toLowerCase();
 
-    // Protection des routes admin
-    if (request.nextUrl.pathname.startsWith('/admin')) {
-        // Si pas de session, rediriger vers login
-        if (!session) {
-            const loginUrl = new URL('/login', request.url);
-            return NextResponse.redirect(loginUrl);
+        // Si sur page publique (login/register) → rediriger vers dashboard
+        if (isPublicRoute) {
+            const dashboardUrl = userRole === 'admin' ? '/admin' : '/dashboard';
+            return NextResponse.redirect(new URL(dashboardUrl, request.url));
         }
 
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .single();
-
-        console.log('[MIDDLEWARE] User role:', profile?.role, 'for user:', session.user.id);
-
-        if (!profile || profile.role?.toLowerCase() !== 'admin') {
-            const dashboardUrl = new URL('/dashboard', request.url);
-            return NextResponse.redirect(dashboardUrl);
+        // Si route admin mais pas admin → rediriger vers dashboard agent
+        if (isAdminRoute && userRole !== 'admin') {
+            return NextResponse.redirect(new URL('/dashboard', request.url));
         }
     }
 
@@ -88,6 +75,14 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        '/((?!_next/static|_next/image|favicon.ico|api).*)',
+        /*
+         * Match all request paths except:
+         * - _next/static (static files)
+         * - _next/image (image optimization files)
+         * - favicon.ico (favicon file)
+         * - api routes (API endpoints)
+         * - public files (images, fonts, etc.)
+         */
+        '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf|eot)).*)',
     ],
 };

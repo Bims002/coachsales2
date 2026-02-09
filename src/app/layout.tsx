@@ -19,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
-      <head>
+      <body className={inter.className}>
         {/* Hotjar Tracking Code for Mvp_Coachsales */}
         <Script id="hotjar" strategy="afterInteractive">
           {`
@@ -47,8 +47,7 @@ export default function RootLayout({
             gtag('config', 'G-8T000FZ59H');
           `}
         </Script>
-      </head>
-      <body className={inter.className}>
+
         <AuthProvider>
           <Header />
           <main>
