@@ -211,6 +211,11 @@ export default function SimulationPage() {
                 playAudio(data.audio);
             }
 
+            // 🔥 WARM-UP CLIENT: Réveiller la route audio (serverless)
+            const warmupData = new FormData();
+            warmupData.append('warmup', 'true');
+            fetch('/api/simulation/audio', { method: 'POST', body: warmupData }).catch(e => console.error("Warmup audio failed", e));
+
             // 2. Démarrer le micro
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
@@ -234,8 +239,8 @@ export default function SimulationPage() {
             let silenceStart = Date.now();
             let speechStart = Date.now();
             let isSpeaking = false;
-            let silenceThreshold = 450; // 450ms : le "sweet spot" pour la réactivité
-            let volumeThreshold = 35;    // Sensibilité légèrement augmentée pour ignorer les bruits de fond
+            let silenceThreshold = 450;
+            let volumeThreshold = 20;    // Sensibilité augmentée (était 35) pour mieux capter les micros faibles
             let maxSegmentDuration = 20000;
 
             const checkVAD = () => {

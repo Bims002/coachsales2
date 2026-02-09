@@ -12,12 +12,12 @@ export class SpeechToTextManager {
         try {
             console.log('--- [STT] 📡 Envoi reconnaissance buffer à Groq Whisper...');
 
-            // On construit manuellement l'objet File pour éviter les soucis de compatibilité fs/path sur Vercel Edge/Node
+            // Optimisation: Création directe du Fichier pour Groq (compatible Edge/Node)
+            const blob = new Blob([new Uint8Array(buffer)], { type: 'audio/webm' });
+            const audioFile = new File([blob], "input.webm", { type: "audio/webm" });
+
             const transcription = await groq.audio.transcriptions.create({
-                file: await (async () => {
-                    const blob = new Blob([new Uint8Array(buffer)], { type: 'audio/webm' });
-                    return new File([blob], "input.webm", { type: "audio/webm" });
-                })(),
+                file: audioFile,
                 model: "whisper-large-v3-turbo",
                 language: "fr",
                 response_format: "json",

@@ -7,9 +7,18 @@ export async function POST(req: Request) {
         const { productId, productContext, userId } = body;
         const channelId = `sim-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-        // Message d'accueil initial
+        // Message d'accueil initial (Cache RAM pour éviter la latence TTS au démarrage)
         const greeting = "Oui allô ?";
-        const audioContent = await synthesizeSpeech(greeting);
+        let audioContent: Buffer;
+
+        if ((global as any).cachedGreetingAudio) {
+            console.log('--- [CACHE] ⚡ Utilisation du message d\'accueil en cache');
+            audioContent = (global as any).cachedGreetingAudio;
+        } else {
+            console.log('--- [TTS] 🔊 Génération du message d\'accueil (premier appel)');
+            audioContent = await synthesizeSpeech(greeting);
+            (global as any).cachedGreetingAudio = audioContent;
+        }
 
         // On ne trigger PAS Pusher ici car le client n'est pas encore abonné.
         // on renvoie les infos en direct pour que le client commence.
@@ -18,7 +27,7 @@ export async function POST(req: Request) {
         // Cela réduit la latence du premier "vrai" tour de parole
         import('@/lib/gemini').then(({ groq }) => {
             groq.chat.completions.create({
-                model: "llama-3.3-70b-versatile",
+                model: "llama-3.1-8b-instant",
                 messages: [{ role: "user", content: "ping" }],
                 max_tokens: 1
             }).catch(err => console.error("Warmup error (non-blocking):", err));

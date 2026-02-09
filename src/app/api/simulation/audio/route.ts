@@ -14,18 +14,26 @@ export async function POST(req: Request) {
         const objections = JSON.parse(formData.get('objections') as string || '[]');
         const resistance = formData.get('resistance') as string || 'Moyen';
 
+        // 🔥 WARM-UP HANDLE
+        if (formData.get('warmup') === 'true') {
+            console.log('--- [API] 🔥 Warm-up request received');
+            return NextResponse.json({ success: true, message: 'Warmed up' });
+        }
+
         if (!audioBlob || !channelId) {
             return NextResponse.json({ error: 'Missing data' }, { status: 400 });
         }
 
         // 1. Convertir Blob en Buffer pour Google STT
+        const startUpload = Date.now();
         const buffer = Buffer.from(await audioBlob.arrayBuffer());
-        console.log(`--- [API] 🎤 Audio reçu: ${buffer.length} bytes, turn: ${turnCount}`);
+        console.log(`--- [API] 🎤 Audio reçu: ${buffer.length} bytes, turn: ${turnCount} (Upload+Parse: ${Date.now() - startUpload}ms)`);
 
         // 2. STT
+        const startSTT = Date.now();
         const stt = new SpeechToTextManager(() => { });
         const transcript = await stt.recognizeBuffer(buffer);
-        console.log('--- [API] 📝 Transcription:', transcript);
+        console.log(`--- [API] 📝 Transcription: "${transcript}" (STT: ${Date.now() - startSTT}ms)`);
 
         if (!transcript || transcript.trim().length < 2) {
             console.log('--- [API] ⚠️ Transcription trop courte ou vide');
@@ -33,6 +41,7 @@ export async function POST(req: Request) {
         }
 
         // 3. IA via SimulationManager
+        const startAI = Date.now();
         const updatedHistory = [...history, { role: 'user', content: transcript }];
         const simulationResult = await SimulationManager.generateResponse({
             history: updatedHistory,
@@ -41,12 +50,14 @@ export async function POST(req: Request) {
             objections,
             resistance
         });
-        console.log('--- [API] 🤖 Réponse IA:', simulationResult.text, 'HangUp:', simulationResult.hangUp);
+        console.log(`--- [API] 🤖 Réponse IA: "${simulationResult.text}" (AI: ${Date.now() - startAI}ms)`);
 
         // 4. TTS
+        const startTTS = Date.now();
         // On utilise le SSML s'il est disponible pour une meilleure intonation, sinon le texte brut
         const audioResponse = await SimulationManager.getAudio(simulationResult.ssml || simulationResult.text);
-        console.log('--- [API] 🔊 Audio généré:', audioResponse.length, 'bytes');
+        console.log(`--- [API] 🔊 Audio généré: ${audioResponse.length} bytes (TTS: ${Date.now() - startTTS}ms)`);
+        console.log(`--- [API] ⏱️ TOTAL SERVER TIME: ${Date.now() - startUpload}ms`);
 
         // 5. Pusher (Optionnel maintenant, on préfère le JSON direct pour éviter les limites de taille)
         /* 
