@@ -51,7 +51,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: https:",
-              "connect-src 'self' https://*.supabase.co https://*.google.com wss://*.supabase.co https://*.hotjar.com https://*.hotjar.io wss://*.hotjar.com https://*.google-analytics.com https://*.analytics.google.com https://*.g.doubleclick.net",
+              "connect-src 'self' https://*.supabase.co https://*.google.com wss://*.supabase.co https://*.hotjar.com https://*.hotjar.io wss://*.hotjar.com https://*.google-analytics.com https://*.analytics.google.com https://*.g.doubleclick.net https://*.pusher.com https://*.pusherapp.com wss://*.pusher.com",
               "media-src 'self' blob:",
               "frame-src 'self' https://*.hotjar.com",
               "frame-ancestors 'none'",

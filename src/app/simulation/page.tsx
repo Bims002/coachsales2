@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { Mic, Phone, PhoneOff, User as UserIcon, Loader2, ArrowLeft, Trophy, Info } from "lucide-react";
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import io from 'socket.io-client';
 import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/context/AuthContext';
 
@@ -14,6 +13,7 @@ interface Product {
     description: string;
     difficulty: number;
     objections?: string[];
+    resistance?: string;
 }
 
 interface SimulationResult {
@@ -36,9 +36,17 @@ export default function SimulationPage() {
     const [loadingProducts, setLoadingProducts] = useState(true);
     const [duration, setDuration] = useState(0);
 
-    const socketRef = useRef<any>(null);
+    const [channelId, setChannelId] = useState<string | null>(null);
+    const [conversationHistory, setConversationHistory] = useState<Array<{ role: string; content: string }>>([]);
+    const historyRef = useRef(conversationHistory);
+
+    // Synchroniser le ref avec le state
+    useEffect(() => {
+        historyRef.current = conversationHistory;
+    }, [conversationHistory]);
+    const pusherRef = useRef<any>(null);
+    const channelRef = useRef<any>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const socketInitialized = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     const supabase = createClient();
@@ -60,96 +68,48 @@ export default function SimulationPage() {
         userRef.current = user;
     }, [user]);
 
+    // Initialisation Pusher
     useEffect(() => {
-        if (socketInitialized.current) return;
-        socketInitialized.current = true;
-
-        const initSocket = async () => {
-            try {
-                await fetch('/api/simulation-socket');
-                const socket = io({ path: '/api/simulation-socket' });
-
-                socket.on('connect', () => {
-                    setIsSocketReady(true);
-                });
-
-                socket.on('audio_chunk', (data: any) => {
-                    playAudio(data);
-                });
-
-                socket.on('transcript_interim', (data: { text: string }) => {
-                    setCurrentTranscript(data.text);
-                });
-
-                socket.on('simulation_complete', async (result: SimulationResult) => {
-                    console.log('--- [CLIENT] 📊 Résultat reçu du serveur:', result);
-
-                    // Utiliser userRef ou tenter de récupérer la session Supabase en direct
-                    let currentUser = userRef.current;
-
-                    if (!currentUser) {
-                        const { data: { session } } = await supabase.auth.getSession();
-                        currentUser = session?.user || null;
-                    }
-
-                    if (currentUser) {
-                        console.log('--- [CLIENT] 💾 Sauvegarde dans Supabase pour user:', currentUser.id);
-                        const { data, error } = await supabase.from('simulations').insert({
-                            user_id: currentUser.id,
-                            product_id: result.product_id || null,
-                            transcript: result.transcript,
-                            score: result.score,
-                            feedback: result.feedback,
-                            duration_seconds: result.duration_seconds,
-                            strengths: result.strengths || [],
-                            improvements: result.improvements || [],
-                        }).select().single();
-
-                        if (error) {
-                            console.error('--- [CLIENT] ❌ Erreur sauvegarde Supabase:', error);
-                            alert("Erreur lors de la sauvegarde du résultat : " + error.message);
-                        }
-
-                        if (data) {
-                            console.log('--- [CLIENT] ✅ Sauvegarde réussie, redirection vers:', `/results/${data.id}`);
-                            router.push(`/results/${data.id}`);
-                        }
-                    } else {
-                        console.warn('--- [CLIENT] ⚠️ Pas d\'utilisateur connecté (même après vérification session), impossible de sauvegarder');
-                        // Option de secours: Rediriger vers l'historique si on ne peut pas sauvegarder ici
-                        alert("Simulation terminée mais session introuvable. Veuillez consulter votre historique.");
-                    }
-                });
-
-                // Écouter si le prospect raccroche
-                socket.on('prospect_hangup', () => {
-                    console.log('--- [CLIENT] 📞 Le prospect a raccroché !');
-                    // Arrêter l'enregistrement audio
-                    if (mediaRecorderRef.current) {
-                        mediaRecorderRef.current.stop();
-                        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
-                    }
-                    setStatus('idle');
-                    setCurrentTranscript('');
-                });
-
-                socket.on('disconnect', () => {
-                    setIsSocketReady(false);
-                    setStatus('idle');
-                });
-
-                socketRef.current = socket;
-            } catch (err) {
-                console.error('--- [CLIENT] ❌ Erreur:', err);
-            }
-        };
-
-        initSocket();
+        import('pusher-js').then(({ default: Pusher }) => {
+            pusherRef.current = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
+                cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+            });
+            setIsSocketReady(true);
+        });
 
         return () => {
-            socketRef.current?.disconnect();
+            if (channelRef.current) {
+                channelRef.current.unbind_all();
+                pusherRef.current?.unsubscribe(channelId);
+            }
         };
-    }, [user, router]);
+    }, []);
+
+    // Gérer les événements Pusher une fois le channelId connu
+    useEffect(() => {
+        if (!channelId || !pusherRef.current) return;
+
+        const channel = pusherRef.current.subscribe(channelId);
+        channelRef.current = channel;
+
+        channel.bind('avatar-response', (data: any) => {
+            console.log('--- [PUSHER] 📥 Réponse reçue:', data.transcript);
+            if (data.audio) {
+                setConversationHistory(prev => [...prev, { role: 'assistant', content: data.transcript }]);
+                playAudio(data.audio);
+            }
+        });
+
+        channel.bind('prospect_hangup', () => {
+            console.log('--- [PUSHER] 📞 Le prospect a raccroché !');
+            stopSimulation();
+        });
+
+        return () => {
+            channel.unbind_all();
+            pusherRef.current?.unsubscribe(channelId);
+        };
+    }, [channelId]);
 
     // Timer
     useEffect(() => {
@@ -172,43 +132,86 @@ export default function SimulationPage() {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
     const playAudio = async (audioData: any) => {
         try {
+            // Arrêter l'audio précédent s'il existe (Barge-in / Interruptibilité)
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current.currentTime = 0;
+            }
+
             setStatus('speaking');
             setCurrentTranscript('');
 
             let audioBlob: Blob;
-            if (audioData.type === 'Buffer' && Array.isArray(audioData.data)) {
-                audioBlob = new Blob([new Uint8Array(audioData.data)], { type: 'audio/mpeg' });
-            } else if (audioData instanceof ArrayBuffer) {
-                audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
+            if (typeof audioData === 'string') {
+                const binaryString = window.atob(audioData);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                audioBlob = new Blob([bytes], { type: 'audio/mpeg' });
             } else {
                 audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
             }
 
             const audioUrl = URL.createObjectURL(audioBlob);
             const audio = new Audio(audioUrl);
+            audioRef.current = audio;
 
             audio.onended = () => {
                 URL.revokeObjectURL(audioUrl);
                 setStatus('listening');
+                audioRef.current = null;
             };
 
             audio.onerror = (e) => {
                 setStatus('listening');
+                audioRef.current = null;
             };
 
             await audio.play();
 
         } catch (error) {
+            console.error('--- [CLIENT] ❌ Erreur lecture audio:', error);
             setStatus('listening');
         }
     };
 
     const startSimulation = async () => {
-        if (!socketRef.current || !isSocketReady || !selectedProduct) return;
+        if (!pusherRef.current || !selectedProduct) return;
 
         try {
+            setStatus('calling');
+            setDuration(0);
+            setConversationHistory([]);
+
+            // 1. Initialiser la simulation via API
+            const product = products.find(p => p.id === selectedProduct);
+            const startRes = await fetch('/api/simulation/start', {
+                method: 'POST',
+                body: JSON.stringify({
+                    productId: selectedProduct,
+                    productContext: product?.description || '',
+                    userId: user?.id
+                })
+            });
+            const data = await startRes.json();
+            if (!data.success) throw new Error(data.error || 'Erreur API');
+
+            const newChannelId = data.channelId;
+            setChannelId(newChannelId);
+
+            // Jouer l'accueil reçu en JSON
+            if (data.audio) {
+                console.log('--- [CLIENT] 🔊 Lecture de l\'accueil...');
+                setConversationHistory([{ role: 'assistant', content: data.greeting }]);
+                playAudio(data.audio);
+            }
+
+            // 2. Démarrer le micro
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     channelCount: 1,
@@ -218,45 +221,173 @@ export default function SimulationPage() {
                 }
             });
 
+            // --- Logique VAD (Voice Activity Detection) ---
+            const audioContext = new AudioContext();
+            const source = audioContext.createMediaStreamSource(stream);
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 512;
+            source.connect(analyser);
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            let silenceStart = Date.now();
+            let speechStart = Date.now();
+            let isSpeaking = false;
+            let silenceThreshold = 450; // 450ms : le "sweet spot" pour la réactivité
+            let volumeThreshold = 35;    // Sensibilité légèrement augmentée pour ignorer les bruits de fond
+            let maxSegmentDuration = 20000;
+
+            const checkVAD = () => {
+                if (mediaRecorder.state !== 'recording' || isProcessing) {
+                    requestAnimationFrame(checkVAD);
+                    return;
+                }
+
+                analyser.getByteFrequencyData(dataArray);
+                let sum = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    sum += dataArray[i];
+                }
+                let average = sum / bufferLength;
+
+                const now = Date.now();
+
+                if (average > volumeThreshold) {
+                    if (!isSpeaking) {
+                        isSpeaking = true;
+                        speechStart = now;
+                        // Si l'utilisateur commence à parler, on coupe l'avatar s'il parlait (Barge-in)
+                        if (audioRef.current) {
+                            console.log('--- [VAD] ⚡ Interruption de l\'avatar détectée');
+                            audioRef.current.pause();
+                            audioRef.current.currentTime = 0;
+                            setStatus('listening');
+                        }
+                    }
+                    silenceStart = now;
+                } else {
+                    // Si on détecte un silence de 1s OU si on parle depuis plus de 20s
+                    const isSilenceLongEnough = isSpeaking && (now - silenceStart > silenceThreshold);
+                    const isSegmentTooLong = isSpeaking && (now - speechStart > maxSegmentDuration);
+
+                    if (isSilenceLongEnough || isSegmentTooLong) {
+                        console.log(`--- [VAD] 😶 ${isSegmentTooLong ? 'Temps max atteint' : 'Silence détecté'}, envoi audio...`);
+                        isSpeaking = false;
+                        mediaRecorder.stop();
+                        mediaRecorder.start();
+                    }
+                }
+                requestAnimationFrame(checkVAD);
+            };
+
+            let isProcessing = false;
+
             const mediaRecorder = new MediaRecorder(stream, {
                 mimeType: 'audio/webm;codecs=opus'
             });
             mediaRecorderRef.current = mediaRecorder;
 
             mediaRecorder.ondataavailable = async (event) => {
-                if (event.data.size > 0 && socketRef.current) {
-                    const buffer = await event.data.arrayBuffer();
-                    socketRef.current.emit('audio_chunk', buffer);
+                if (event.data.size > 1000 && newChannelId && !isProcessing) {
+                    isProcessing = true;
+                    console.log(`--- [CLIENT] 🎤 Envoi segment audio: ${event.data.size} bytes`);
+
+                    const formData = new FormData();
+                    formData.append('audio', event.data);
+                    formData.append('channelId', newChannelId);
+                    formData.append('history', JSON.stringify(historyRef.current));
+                    formData.append('productContext', product?.description || '');
+                    formData.append('turnCount', historyRef.current.length.toString());
+                    formData.append('objections', JSON.stringify(product?.objections || []));
+                    formData.append('resistance', product?.resistance || 'Moyen');
+
+                    try {
+                        const res = await fetch('/api/simulation/audio', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const resData = await res.json();
+
+                        if (resData.success && resData.transcript && resData.audio) {
+                            console.log('--- [CLIENT] 🤖 Réponse IA reçue en JSON:', resData.transcript, 'HangUp:', resData.hangUp);
+
+                            // Mettre à jour l'historique
+                            const updatedHistory = [
+                                ...historyRef.current,
+                                { role: 'user', content: resData.userTranscript },
+                                { role: 'assistant', content: resData.transcript }
+                            ];
+                            setConversationHistory(updatedHistory);
+
+                            // Jouer l'audio
+                            await playAudio(resData.audio);
+
+                            // Si l'IA décide de raccrocher
+                            if (resData.hangUp) {
+                                console.log('--- [CLIENT] 👋 L\'avatar a décidé de raccrocher');
+                                setTimeout(() => {
+                                    stopSimulation();
+                                }, 1000); // Petit délai pour laisser l'audio finir
+                            }
+                        } else if (resData.message === 'No speech detected') {
+                            console.log('--- [CLIENT] 💨 Aucun silence détecté dans ce segment');
+                        }
+                    } catch (err) {
+                        console.error('--- [CLIENT] ❌ Erreur segment audio:', err);
+                    } finally {
+                        isProcessing = false;
+                    }
                 }
             };
 
-            mediaRecorder.start(250);
-            setStatus('calling');
+            mediaRecorder.start();
+            checkVAD();
 
-            const product = products.find(p => p.id === selectedProduct);
-            socketRef.current.emit('start_simulation', {
-                productId: selectedProduct,
-                productContext: product?.description || product?.name || '',
-                objections: product?.objections || [],
-                userId: user?.id || '',
-            });
+            return () => {
+                audioContext.close();
+            };
 
         } catch (err) {
-            alert("Impossible d'accéder au microphone. Vérifiez les permissions.");
+            console.error('--- [CLIENT] ❌ Erreur start:', err);
+            alert("Erreur lors du démarrage : " + (err as any).message);
+            setStatus('idle');
         }
     };
 
-    const stopSimulation = () => {
-        if (socketRef.current) {
-            socketRef.current.emit('end_simulation');
-        }
-
+    const stopSimulation = async () => {
         if (mediaRecorderRef.current) {
             mediaRecorderRef.current.stop();
             mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
         }
-        setStatus('idle');
-        setCurrentTranscript('');
+
+        setStatus('speaking'); // On utilise un état visuel pendant le calcul
+        setCurrentTranscript('Analyse de votre performance en cours...');
+
+        try {
+            console.log('--- [CLIENT] 📊 Fin de simulation, calcul du score...');
+            const res = await fetch('/api/simulation/finish', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    history: historyRef.current,
+                    productId: selectedProduct,
+                    userId: user?.id
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                console.log('--- [CLIENT] ✅ Score calculé, redirection vers:', `/results/${data.simulationId}`);
+                window.location.href = `/results/${data.simulationId}`;
+            } else {
+                throw new Error(data.error || 'Erreur lors du scoring');
+            }
+        } catch (error) {
+            console.error('--- [CLIENT] ❌ Erreur fin simulation:', error);
+            alert("Erreur lors de l'analyse : " + (error as any).message);
+            setStatus('idle');
+        }
     };
 
     const selectedProductData = products.find(p => p.id === selectedProduct);
@@ -421,31 +552,6 @@ export default function SimulationPage() {
 
                         </div>
 
-                        {/* Transcript Bubble */}
-                        {(currentTranscript || status === 'speaking') && (
-                            <div className="mt-12 flex justify-center animate-in slide-in-from-bottom-4 duration-300">
-                                <div
-                                    className="p-5 rounded-2xl max-w-lg shadow-lg relative"
-                                    style={{
-                                        backgroundColor: status === 'speaking' ? 'var(--color-success-light)' : 'var(--color-primary-light)',
-                                        border: `1px solid ${status === 'speaking' ? 'var(--color-success)' : 'var(--color-primary)'}20`
-                                    }}
-                                >
-                                    <p
-                                        className="text-lg italic font-medium text-center"
-                                        style={{ color: status === 'speaking' ? 'var(--color-success)' : 'var(--color-primary)' }}
-                                    >
-                                        {status === 'speaking' ? "Saisie des besoins en cours..." : `"${currentTranscript}"`}
-                                    </p>
-                                    <div
-                                        className="absolute -top-3 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-white text-[10px] font-bold uppercase tracking-wider shadow-sm"
-                                        style={{ color: status === 'speaking' ? 'var(--color-success)' : 'var(--color-primary)' }}
-                                    >
-                                        {status === 'speaking' ? 'Analyse du flux' : 'Transcription Directe'}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
 
                         {/* Background Decor */}
                         <div className="absolute top-0 right-0 p-4">

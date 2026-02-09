@@ -1,108 +1,18 @@
 import { synthesizeSpeech } from './google-ai';
 import { generateProspectResponse } from './gemini';
-import { SpeechToTextManager } from './stt';
-import { calculateScore, ScoringResult } from './scoring';
 
-interface SimulationConfig {
-    productId: string;
+export interface SimulationState {
+    history: Array<{ role: string; content: string }>;
     productContext: string;
+    turnCount: number;
     objections?: string[];
-    userId?: string;
+    resistance?: string;
 }
 
 export class SimulationManager {
-    private socket: any;
-    private conversationHistory: Array<{ role: string; content: string }> = [];
-    private productContext: string = "";
-    private productId: string = "";
-    private userId: string = "";
-    private objections: string[] = [];
-    private sttManager: SpeechToTextManager | null = null;
-    private isAvatarSpeaking = false;
-    private isProcessing = false;
-    private audioBuffer: Buffer[] = [];
-    private sttStarted = false;
-    private turnCount = 0;
-    private startTime: number = 0;
+    // Cette classe est maintenant une pure "Utility" pour rester stateless
 
-    constructor(socket: any) {
-        this.socket = socket;
-        console.log('--- [MANAGER] 🆕 Instance créée');
-    }
-
-    async startSimulation(config: SimulationConfig) {
-        console.log('--- [MANAGER] 🚀 Démarrage simulation:', config.productContext);
-        this.productContext = config.productContext || '';
-        this.productId = config.productId || '';
-        this.userId = config.userId || '';
-        this.objections = config.objections || [];
-        this.conversationHistory = [];
-        this.isAvatarSpeaking = false;
-        this.isProcessing = false;
-        this.audioBuffer = [];
-        this.sttStarted = false;
-        this.turnCount = 0;
-        this.startTime = Date.now();
-
-        const greeting = "Oui allô ? Je vous écoute.";
-        await this.processModelResponse(greeting);
-    }
-
-    public handleAudioChunk(chunk: Buffer) {
-        if (this.isAvatarSpeaking || this.isProcessing) {
-            this.audioBuffer.push(chunk);
-            if (this.audioBuffer.length > 50) this.audioBuffer.shift();
-            return;
-        }
-
-        if (!this.sttManager || !this.sttStarted) {
-            console.log('--- [MANAGER] 🎤 Ouverture du micro (STT)');
-
-            this.sttManager = new SpeechToTextManager(this.socket, (text) => {
-                console.log(`--- [MANAGER] ⚡ Callback direct reçu: "${text}"`);
-                this.handleFinalTranscript(text);
-            });
-
-            this.sttManager.startRecognition();
-            this.sttStarted = true;
-
-            if (this.audioBuffer.length > 0) {
-                console.log(`--- [MANAGER] 📦 Injection du buffer (${this.audioBuffer.length} chunks)`);
-                this.audioBuffer.forEach(buf => this.sttManager?.write(buf));
-                this.audioBuffer = [];
-            }
-        }
-
-        this.sttManager.write(chunk);
-    }
-
-    private async handleFinalTranscript(text: string) {
-        console.log(`--- [MANAGER] 📂 Début du traitement IA | isProcessing: ${this.isProcessing}`);
-
-        if (this.isProcessing) {
-            console.warn('--- [MANAGER] ⚠️ Rejet: déjà en cours de traitement');
-            return;
-        }
-
-        this.isProcessing = true;
-        this.turnCount++;
-
-        this.conversationHistory.push({ role: 'user', content: text });
-
-        try {
-            console.log('--- [MANAGER] 🤖 Consultation de Groq...');
-            const aiResponse = await this.generateNaturalResponse();
-            console.log(`--- [MANAGER] 🤖 Groq a répondu: "${aiResponse}"`);
-            await this.processModelResponse(aiResponse);
-        } catch (err) {
-            console.error('--- [MANAGER] ❌ Erreur critique IA:', err);
-            this.isProcessing = false;
-            this.isAvatarSpeaking = false;
-        }
-    }
-
-    private async generateNaturalResponse(): Promise<string> {
-        // Varier la personnalité selon le tour
+    static async generateResponse(state: SimulationState) {
         const personalities = [
             'Tu es légèrement sceptique mais poli.',
             'Tu es occupé et pressé de raccrocher.',
@@ -110,157 +20,74 @@ export class SimulationManager {
             'Tu compares avec ce que tu as déjà.',
             'Tu cherches à savoir le prix.',
         ];
-        const personality = personalities[this.turnCount % personalities.length];
+        const personality = personalities[state.turnCount % personalities.length];
 
-        // Sélectionner une objection aléatoire si disponible
-        let objectionInstruction = '';
-        if (this.objections.length > 0 && this.turnCount >= 2 && this.turnCount <= 3) {
-            const randomObjection = this.objections[Math.floor(Math.random() * this.objections.length)];
-            objectionInstruction = `\n\n🚫 OBJECTION À UTILISER CE TOUR (reformule-la naturellement):\n"${randomObjection}"`;
+        const contextPrompt = `Tu es une personne réelle au téléphone, pas une IA.
+        
+        🎭 TON ÉTAT D'ESPRIT ACTUEL: ${personality}
+        📞 PRODUIT DONT ON TE PARLE: ${state.productContext}
+        🛡️ TES OBJECTIONS (si pertinent uniquement): ${state.objections?.join(', ') || 'Néant'}
+        🔥 RÉSISTANCE: ${state.resistance || 'Moyenne'}
+
+        ⚠️ DIRECTIVES DE CONVERSATION (CRUCIAL):
+        1. RÉPONDS DIRECTEMENT: Si l'agent pose une question, réponds. S'il argumente, réagis.
+        2. SOIS ULTRA-COURT: Max 10-15 mots. Parfois un simple "Oui", "Allô ?", "D'accord" suffit.
+        3. SI TU N'AS RIEN COMPRIS: (Transcription vide ou incohérente), dis simplement "Allô ? Vous m'entendez ?" ou "Euh... oui ?".
+        4. NATUREL: Utilise des "euh", "ben", fais des pauses. 
+        5. RACCROCHAGE: Si l'appel doit finir, annonce-le et mets hangUp: true.
+        
+        STRUCTURE JSON:
+        {
+            "text": "ta réponse directe",
+            "hangUp": true/false
+        }`;
+
+        // Si le dernier message utilisateur est trop court ou vide, on force une réaction de type "présence"
+        const lastUserMsg = state.history[state.history.length - 1]?.content || "";
+        if (lastUserMsg.length < 2) {
+            return { text: "Oui ? Je vous écoute...", hangUp: false };
         }
 
-        let contextPrompt = `Tu es un particulier lambda qui reçoit un appel commercial sur son téléphone. Tu n'attendais pas cet appel.
-
-🎭 TON ÉTAT D'ESPRIT CE TOUR: ${personality}
-
-📞 CE QU'ON ESSAIE DE TE VENDRE: ${this.productContext}${objectionInstruction}
-
-⚠️ RÈGLES STRICTES:
-1. Tu es le CLIENT qui reçoit l'appel, PAS le vendeur.
-2. Réponds en UNE SEULE phrase courte (max 15 mots).
-3. Utilise un langage ORAL naturel : "Euh...", "Hmm...", "Ah bon ?", "Ouais", "Ok", "D'accord", etc.
-4. Sois réaliste : tu peux être méfiant, curieux, ou agacé comme un vrai prospect.
-5. Ne répète JAMAIS les mêmes réponses.
-6. Tour actuel: ${this.turnCount} (si > 7, commence à vouloir raccrocher ou conclure)
-
-❌ NE DIS JAMAIS:
-- "Je vous propose..."
-- "Notre offre..."
-- "Laissez-moi vous expliquer..."
-(Ce sont des phrases de VENDEUR)
-
-✅ EXEMPLES DE BONNES RÉPONSES:
-- "Hmm, c'est combien ça ?"
-- "Ouais mais j'ai déjà quelque chose..."
-- "Ah ok. Et y'a un engagement ?"
-- "Écoutez, là je suis occupé..."
-- "C'est quoi votre offre exactement ?"
-
-Réponds UNIQUEMENT comme un client lambda répondrait à ce que le vendeur vient de dire.`;
-
-        return await generateProspectResponse(this.conversationHistory, contextPrompt);
-    }
-
-    // Détecte si le prospect veut raccrocher
-    private isHangupPhrase(text: string): boolean {
-        const hangupPhrases = [
-            'je raccroche',
-            'je vais raccrocher',
-            'au revoir',
-            'bonne journée',
-            'je dois y aller',
-            'je n\'ai pas le temps',
-            'pas intéressé',
-            'ne rappelez plus',
-            'ne m\'appelez plus',
-            'laissez tomber',
-            'ça ne m\'intéresse pas',
-            'merci au revoir',
-            'bye',
-        ];
-        const lowerText = text.toLowerCase();
-        return hangupPhrases.some(phrase => lowerText.includes(phrase));
-    }
-
-    private async processModelResponse(text: string) {
-        this.isAvatarSpeaking = true;
-        this.conversationHistory.push({ role: 'assistant', content: text });
-
-        // Vérifier si le prospect veut raccrocher
-        const shouldHangup = this.isHangupPhrase(text);
+        const rawResponse = await generateProspectResponse(state.history, contextPrompt);
 
         try {
-            console.log('--- [MANAGER] 🔊 Synthèse vocale en cours...');
-            const audioBuffer = await synthesizeSpeech(text);
-            this.socket.emit('audio_chunk', audioBuffer);
+            const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+            const jsonStr = jsonMatch ? jsonMatch[0] : rawResponse;
 
-            const durationMs = (audioBuffer.length / 48000) * 1000;
-            const lockTime = Math.max(1500, durationMs + 800);
+            const parsed = JSON.parse(jsonStr);
+            const rawText = (parsed.text || "D'accord, je vous écoute.").trim();
 
-            console.log(`--- [MANAGER] ⏱️ Micro verrouillé pour ${lockTime.toFixed(0)}ms`);
+            // On enveloppe dans du SSML pour une meilleure intonation
+            // On ajoute un peu d'emphase sur le début et un débit naturel
+            let ssmlText = `<speak><prosody rate="1.05" pitch="+0st">${rawText}</prosody></speak>`;
 
-            setTimeout(async () => {
-                this.isAvatarSpeaking = false;
-                this.isProcessing = false;
+            // Si la phrase contient une question, on peut ajuster (optionnel, mais SSML de base suffit souvent si le texte est bon)
+            // On s'assure que le texte ne contient pas déjà des balises pour ne pas doubler
+            if (rawText.includes('?')) {
+                ssmlText = `<speak><prosody rate="1.0" pitch="+1st">${rawText}</prosody></speak>`;
+            }
 
-                // Si le prospect a annoncé qu'il raccroche, terminer la simulation
-                if (shouldHangup) {
-                    console.log('--- [MANAGER] 📞 Le prospect raccroche !');
-                    this.socket.emit('prospect_hangup', { message: 'Le prospect a raccroché' });
-                    await this.endSimulationAndScore();
-                } else {
-                    console.log('--- [MANAGER] ✅ Micro déverrouillé, prêt pour le tour suivant');
-                    if (this.sttManager) {
-                        this.sttManager.resume();
-                    }
-                }
-            }, lockTime);
-
-        } catch (e) {
-            console.error('--- [MANAGER] ❌ Erreur TTS:', e);
-            this.isAvatarSpeaking = false;
-            this.isProcessing = false;
-
-        }
-    }
-
-    public async endSimulationAndScore(): Promise<ScoringResult | null> {
-        console.log('--- [MANAGER] 📊 Calcul du score de la simulation...');
-
-        if (this.conversationHistory.length < 2) {
-            console.log('--- [MANAGER] ⚠️ Conversation trop courte pour le scoring');
-            return null;
-        }
-
-        try {
-            const result = await calculateScore(this.conversationHistory, this.productContext);
-            const durationSeconds = Math.round((Date.now() - this.startTime) / 1000);
-
-            // Préparer les données pour la sauvegarde
-            const simulationData = {
-                user_id: this.userId || null,
-                product_id: this.productId || null,
-                transcript: this.conversationHistory,
-                score: result.score,
-                feedback: result.feedback,
-                duration_seconds: durationSeconds,
+            return {
+                text: ssmlText,
+                hangUp: !!parsed.hangUp
             };
-
-            // Envoyer au client pour qu'il sauvegarde (car on n'a pas accès à Supabase côté serveur avec les cookies)
-            this.socket.emit('simulation_complete', {
-                ...simulationData,
-                strengths: result.strengths,
-                improvements: result.improvements,
-            });
-
-            console.log('--- [MANAGER] 📤 Événement simulation_complete envoyé au client');
-            console.log('--- [MANAGER] ✅ Score calculé:', result.score);
-            return result;
         } catch (e) {
-            console.error('--- [MANAGER] ❌ Erreur scoring:', e);
-            return null;
+            console.warn('--- [SimulationManager] ⚠️ Échec du parsing JSON, nettoyage manuel du texte');
+            // Nettoyage agressif pour éviter de lire du code
+            const cleanText = rawResponse
+                .replace(/```json\n?|```/g, '') // Supprime les backticks
+                .replace(/\{"text":\s*"|"hangUp":\s*(true|false)\}/g, '') // Supprime les clés JSON si le modèle a foiré
+                .replace(/"\}?$/, '') // Supprime les guillemets de fin
+                .trim();
+
+            return {
+                text: `<speak><prosody rate="1.05">${cleanText || "Allô ? Je n'ai pas bien compris."}</prosody></speak>`,
+                hangUp: cleanText.toLowerCase().includes('raccroche') || cleanText.toLowerCase().includes('au revoir')
+            };
         }
     }
 
-    public cleanup() {
-        console.log('--- [MANAGER] 🧹 Cleanup final');
-        if (this.sttManager) {
-            this.sttManager.stop();
-            this.sttManager = null;
-        }
-        this.isProcessing = false;
-        this.isAvatarSpeaking = false;
-        this.audioBuffer = [];
-        this.sttStarted = false;
+    static async getAudio(text: string) {
+        return await synthesizeSpeech(text);
     }
 }

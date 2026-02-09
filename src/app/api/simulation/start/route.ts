@@ -1,48 +1,27 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { synthesizeSpeech } from '@/lib/google-ai';
-import { rateLimit, RateLimitPresets } from '@/lib/rate-limit';
-import { z } from 'zod';
 
-// Schéma de validation
-const startSimulationSchema = z.object({
-    productId: z.string().uuid('ID de produit invalide'),
-});
-
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
     try {
-        // Rate limiting : 30 requêtes par minute (modéré car utilisé fréquemment)
-        const rateLimitResponse = rateLimit(req, RateLimitPresets.MODERATE);
-        if (rateLimitResponse) {
-            return rateLimitResponse;
-        }
-
         const body = await req.json();
+        const { productId, productContext, userId } = body;
+        const channelId = `sim-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-        // Validation avec Zod
-        const validationResult = startSimulationSchema.safeParse(body);
-        if (!validationResult.success) {
-            return NextResponse.json({
-                error: 'Données invalides',
-                details: validationResult.error.issues.map((issue) => ({
-                    field: issue.path.join('.'),
-                    message: issue.message
-                }))
-            }, { status: 400 });
-        }
+        // Message d'accueil initial
+        const greeting = "Oui allô ?";
+        const audioContent = await synthesizeSpeech(greeting);
 
-        const { productId } = validationResult.data;
-
-        // Pour le MVP, on simule le premier message "Allô ?" pré-généré
-        // En production, on pourrait générer dynamiquement selon le produit
-        const audioContent = await synthesizeSpeech("Allô ?");
-
-        // On pourrait sauvegarder la simulation en BDD ici avec productId
-
-        return new NextResponse(new Uint8Array(audioContent as Buffer), {
-            headers: { 'Content-Type': 'audio/mpeg' }
+        // On ne trigger PAS Pusher ici car le client n'est pas encore abonné.
+        // On renvoie les infos en direct pour que le client commence.
+        return NextResponse.json({
+            success: true,
+            channelId,
+            greeting,
+            audio: audioContent.toString('base64')
         });
-    } catch (error) {
-        console.error('Simulation start error:', error);
-        return NextResponse.json({ error: 'Failed to start simulation' }, { status: 500 });
+
+    } catch (error: any) {
+        console.error('--- [API] ❌ Erreur start simulation:', error, (error as any).stack);
+        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
     }
 }

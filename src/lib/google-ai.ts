@@ -15,18 +15,14 @@ export const speechClient = new SpeechClient({ credentials });
 export const ttsClient = new TextToSpeechClient({ credentials });
 
 /**
- * Convertit du texte en audio (Buffer) en utilisant les voix Neural2 de haute qualité.
- * Voix disponibles pour fr-FR:
- * - fr-FR-Neural2-A (femme)
- * - fr-FR-Neural2-B (homme)
- * - fr-FR-Neural2-C (femme)
- * - fr-FR-Neural2-D (homme)
- * - fr-FR-Neural2-E (femme)
+ * Convertit du texte ou SSML en audio (Buffer) en utilisant les voix Studio.
+ * Supporte le format SSML pour un rendu plus naturel.
  */
-export async function synthesizeSpeech(text: string, voiceName: string = 'fr-FR-Neural2-B') {
+export async function synthesizeSpeech(content: string, voiceName: string = 'fr-FR-Studio-A') {
     try {
+        const isSsml = content.startsWith('<speak>');
         const request = {
-            input: { text },
+            input: isSsml ? { ssml: content } : { text: content },
             voice: {
                 languageCode: 'fr-FR',
                 name: voiceName,
@@ -34,15 +30,15 @@ export async function synthesizeSpeech(text: string, voiceName: string = 'fr-FR-
             audioConfig: {
                 audioEncoding: 'MP3' as const,
                 sampleRateHertz: 24000,
-                speakingRate: 0.95,  // Légèrement plus lent pour une meilleure compréhension
-                pitch: -1.5,         // Voix légèrement plus grave, plus réaliste
-                volumeGainDb: 2.0,   // Un peu plus de volume
+                speakingRate: 1.0, // SSML gérera les variations
+                pitch: 0,
+                volumeGainDb: 0,
             },
         };
 
         const [response] = await ttsClient.synthesizeSpeech(request);
         const audioBuffer = Buffer.from(response.audioContent as Uint8Array);
-        console.log('--- [TTS] Audio généré, taille:', audioBuffer.length, 'bytes');
+        console.log('--- [TTS] Audio généré (SSML:', isSsml, '), taille:', audioBuffer.length, 'bytes');
         return audioBuffer;
     } catch (error) {
         console.error('Erreur synthèse vocale TTS:', error);

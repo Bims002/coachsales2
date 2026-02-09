@@ -1,6 +1,6 @@
 import Groq from "groq-sdk";
 
-const groq = new Groq({
+export const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY || "",
 });
 
@@ -23,13 +23,14 @@ export async function generateProspectResponse(
             });
         }
 
-        console.log('--- [AI] Envoi du message à Groq Llama 3.3 70B...');
+        console.log('--- [AI] Envoi du message à Groq Llama 3 8B...');
 
         const completion = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: "llama3-8b-8192",
             messages,
             temperature: 0.9,
             max_tokens: 1024,
+            response_format: { type: "json_object" }
         });
 
         const response = completion.choices[0]?.message?.content || "";
