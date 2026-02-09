@@ -12,7 +12,18 @@ export async function POST(req: Request) {
         const audioContent = await synthesizeSpeech(greeting);
 
         // On ne trigger PAS Pusher ici car le client n'est pas encore abonné.
-        // On renvoie les infos en direct pour que le client commence.
+        // on renvoie les infos en direct pour que le client commence.
+
+        // 🔥 WARM-UP GROQ: On lance une requête simple en background pour "chauffer" la connexion TLS/TCP
+        // Cela réduit la latence du premier "vrai" tour de parole
+        import('@/lib/gemini').then(({ groq }) => {
+            groq.chat.completions.create({
+                model: "llama-3.3-70b-versatile",
+                messages: [{ role: "user", content: "ping" }],
+                max_tokens: 1
+            }).catch(err => console.error("Warmup error (non-blocking):", err));
+        });
+
         return NextResponse.json({
             success: true,
             channelId,

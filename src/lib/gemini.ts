@@ -23,12 +23,12 @@ export async function generateProspectResponse(
             });
         }
 
-        console.log('--- [AI] Envoi du message à Groq Llama 3 8B...');
+        console.log('--- [AI] Envoi du message à Groq Llama 3.3 70B...');
 
         const completion = await groq.chat.completions.create({
-            model: "llama3-8b-8192",
+            model: "llama-3.3-70b-versatile",
             messages,
-            temperature: 0.9,
+            temperature: 0.7, // Plus stable pour éviter les hallucinations
             max_tokens: 1024,
             response_format: { type: "json_object" }
         });

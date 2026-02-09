@@ -44,7 +44,8 @@ export async function POST(req: Request) {
         console.log('--- [API] 🤖 Réponse IA:', simulationResult.text, 'HangUp:', simulationResult.hangUp);
 
         // 4. TTS
-        const audioResponse = await SimulationManager.getAudio(simulationResult.text);
+        // On utilise le SSML s'il est disponible pour une meilleure intonation, sinon le texte brut
+        const audioResponse = await SimulationManager.getAudio(simulationResult.ssml || simulationResult.text);
         console.log('--- [API] 🔊 Audio généré:', audioResponse.length, 'bytes');
 
         // 5. Pusher (Optionnel maintenant, on préfère le JSON direct pour éviter les limites de taille)

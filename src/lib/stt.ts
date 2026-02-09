@@ -23,7 +23,23 @@ export class SpeechToTextManager {
                 response_format: "json",
             });
 
-            const text = transcription.text || "";
+            let text = transcription.text || "";
+
+            // Nettoyage des hallucinations fréquentes de Whisper
+            const hallucinations = [
+                "Sous-titres réalisés par",
+                "Sous-titres par",
+                "Amara.org",
+                "MBC",
+                "L'équipe de",
+                "pour les malentendants"
+            ];
+
+            if (hallucinations.some(h => text.includes(h)) || text.length < 2) {
+                console.log('--- [STT] 🗑️ Hallucination ou silence ignoré:', text);
+                return "";
+            }
+
             if (text) {
                 console.log('--- [STT] ✅ Transcription reçue (Whisper):', text);
             }
