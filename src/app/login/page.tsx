@@ -21,43 +21,50 @@ export default function LoginPage() {
         setError('');
         setLoading(true);
 
-        const { error } = await signIn(email, password);
+        try {
+            const { error } = await signIn(email, password);
 
-        if (error) {
-            if (error.message?.includes('Email not confirmed')) {
-                setError('Veuillez confirmer votre email avant de vous connecter. Vérifiez votre boîte de réception.');
-            } else if (error.message?.includes('Invalid login credentials')) {
-                setError('Email ou mot de passe incorrect. Vérifiez vos identifiants.');
-            } else {
-                setError(error.message || 'Erreur de connexion');
+            if (error) {
+                if (error.message?.includes('Email not confirmed')) {
+                    setError('Veuillez confirmer votre email avant de vous connecter. Vérifiez votre boîte de réception.');
+                } else if (error.message?.includes('Invalid login credentials')) {
+                    setError('Email ou mot de passe incorrect. Vérifiez vos identifiants.');
+                } else {
+                    setError(error.message || 'Erreur de connexion');
+                }
+                setLoading(false);
+                return;
             }
-            setLoading(false);
-        } else {
-            // Attendre un peu que le contexte se mette à jour
-            await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Récupérer l'utilisateur authentifié
+            // Connexion réussie - récupérer le rôle pour la redirection
             const { data: { user } } = await supabase.auth.getUser();
 
+            let redirectUrl = '/dashboard';
+
             if (user) {
-                // Récupérer le profil
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('role')
-                    .eq('id', user.id)
-                    .single();
+                try {
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('role')
+                        .eq('id', user.id)
+                        .single();
 
-                console.log('[LOGIN] User role:', profile?.role);
-
-                // Rediriger selon le rôle
-                if (profile?.role?.toLowerCase() === 'admin') {
-                    router.push('/admin');
-                } else {
-                    router.push('/dashboard');
+                    if (profile?.role?.toLowerCase() === 'admin') {
+                        redirectUrl = '/admin';
+                    }
+                } catch (profileError) {
+                    console.error('[LOGIN] Erreur profil:', profileError);
+                    // Continuer avec la redirection par défaut
                 }
-            } else {
-                router.push('/dashboard');
             }
+
+            // Rediriger avec rechargement complet
+            window.location.href = redirectUrl;
+
+        } catch (err) {
+            console.error('[LOGIN] Erreur inattendue:', err);
+            setError('Une erreur inattendue est survenue. Veuillez réessayer.');
+            setLoading(false);
         }
     };
 
