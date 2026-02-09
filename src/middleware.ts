@@ -34,39 +34,44 @@ export async function middleware(request: NextRequest) {
         }
     );
 
-    // Routes publiques (pas besoin d'être connecté)
+    // IMPORTANT: Utiliser getUser() au lieu de getSession() pour Vercel/Edge
+    // Cela rafraîchit la session si nécessaire et évite les loops
+    const { data: { user } } = await supabase.auth.getUser();
+
     const publicRoutes = ['/login', '/register', '/test'];
     const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname.startsWith(route));
     const isAdminRoute = request.nextUrl.pathname.startsWith('/admin');
 
-    // Récupérer la session UNE SEULE FOIS
-    const { data: { session } } = await supabase.auth.getSession();
-
-    // Si non connecté et route protégée → redirection vers login
-    if (!session && !isPublicRoute) {
+    // Cas 1: Pas de session et route protégée
+    if (!user && !isPublicRoute) {
         return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // Si connecté, on a besoin du rôle seulement pour les routes publiques (redirection) ou admin (protection)
-    if (session && (isPublicRoute || isAdminRoute)) {
-        // Récupérer le rôle UNE SEULE FOIS si nécessaire
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .single();
-
-        const userRole = profile?.role?.toLowerCase();
-
-        // Si sur page publique (login/register) → rediriger vers dashboard
+    // Cas 2: Session présente
+    if (user) {
+        // Redirection depuis les pages de login/register
         if (isPublicRoute) {
-            const dashboardUrl = userRole === 'admin' ? '/admin' : '/dashboard';
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+
+            const dashboardUrl = profile?.role?.toLowerCase() === 'admin' ? '/admin' : '/dashboard';
             return NextResponse.redirect(new URL(dashboardUrl, request.url));
         }
 
-        // Si route admin mais pas admin → rediriger vers dashboard agent
-        if (isAdminRoute && userRole !== 'admin') {
-            return NextResponse.redirect(new URL('/dashboard', request.url));
+        // Protection de la zone admin
+        if (isAdminRoute) {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+
+            if (!profile || profile.role?.toLowerCase() !== 'admin') {
+                return NextResponse.redirect(new URL('/dashboard', request.url));
+            }
         }
     }
 

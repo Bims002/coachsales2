@@ -15,8 +15,14 @@ export default function Header() {
     const dashboardPath = isAdmin ? '/admin' : '/dashboard';
 
     const handleSignOut = async () => {
-        await signOut();
-        router.push('/login');
+        try {
+            await signOut();
+            // Utiliser window.location pour forcer un rechargement complet et purger les cookies
+            window.location.href = '/login';
+        } catch (error) {
+            console.error('Erreur lors de la déconnexion:', error);
+            window.location.href = '/login';
+        }
     };
 
     const isActive = (path: string) => pathname === path;
