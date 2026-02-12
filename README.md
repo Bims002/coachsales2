@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Coachsales est une application d'entraînement pour les commerciaux.
 
-## Getting Started
+Son but est de permettre aux vendeurs de s'entraîner à la vente par la voix, face à une Intelligence Artificielle qui joue le rôle d'un prospect (client potentiel).
 
-First, run the development server:
+Voici les fonctionnalités clés :
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Simulation Vocale Réaliste :
+Le vendeur choisit un scénario (ex: "Vendre un forfait mobile à un prospect difficile").
+Il parle réellement à voix haute via son micro.
+L'IA (le prospect) écoute, comprend, et répond vocalement avec des objections réalistes ("C'est trop cher", "Je suis déjà chez Orange", etc.).
+Le but est de convaincre l'IA de prendre rendez-vous ou d'acheter.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Coaching & Feedback (Scoring) :
+À la fin de l'appel, l'IA analyse la conversation.
+Elle donne une note sur 100.
+Elle liste les points forts et les axes d'amélioration (ex: "Tu as coupé la parole", "Tu n'as pas traité l'objection prix").
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Tableau de Bord :
+Permet au vendeur de voir sa progression.
+Permet aux managers (Admins) de gérer les scénarios de vente (Produits) et voir les résultats de leur équipe.
+En résumé : C'est un "simulateur de vol" pour la vente, disponible 24/7 pour s'entraîner sans "brûler" de vrais prospects.MVP Coachsales est une application d'entraînement pour les commerciaux.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Son but est de permettre aux vendeurs de s'entraîner à la vente par la voix, face à une Intelligence Artificielle qui joue le rôle d'un prospect (client potentiel).
 
-## Learn More
+Voici les fonctionnalités clés :
 
-To learn more about Next.js, take a look at the following resources:
+Simulation Vocale Réaliste :
+Le vendeur choisit un scénario (ex: "Vendre un forfait mobile à un prospect difficile").
+Il parle réellement à voix haute via son micro.
+L'IA (le prospect) écoute, comprend, et répond vocalement avec des objections réalistes ("C'est trop cher", "Je suis déjà chez Orange", etc.).
+Le but est de convaincre l'IA de prendre rendez-vous ou d'acheter.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Coaching & Feedback (Scoring) :
+À la fin de l'appel, l'IA analyse la conversation.
+Elle donne une note sur 100.
+Elle liste les points forts et les axes d'amélioration (ex: "Tu as coupé la parole", "Tu n'as pas traité l'objection prix").
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Tableau de Bord :
+Permet au vendeur de voir sa progression.
+Permet aux managers (Admins) de gérer les scénarios de vente (Produits) et voir les résultats de leur équipe.
+En résumé : C'est un "simulateur de vol" pour la vente, disponible 24/7 pour s'entraîner sans "brûler" de vrais prospects.
