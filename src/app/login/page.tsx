@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import Link from 'next/link';
 import { LogIn, Loader2, Mail, Lock, Mic } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { createClient } from '@/lib/supabase-browser';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -13,8 +11,7 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const { signIn } = useAuth();
-    const router = useRouter();
-    const supabase = createClient();
+
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -32,38 +29,16 @@ export default function LoginPage() {
                 } else {
                     setError(error.message || 'Erreur de connexion');
                 }
-                setLoading(false);
                 return;
             }
 
-            // Connexion réussie - récupérer le rôle pour la redirection
-            const { data: { user } } = await supabase.auth.getUser();
-
-            let redirectUrl = '/dashboard';
-
-            if (user) {
-                try {
-                    const { data: profile } = await supabase
-                        .from('profiles')
-                        .select('role')
-                        .eq('id', user.id)
-                        .single();
-
-                    if (profile?.role?.toLowerCase() === 'admin') {
-                        redirectUrl = '/admin';
-                    }
-                } catch (profileError) {
-                    console.error('[LOGIN] Erreur profil:', profileError);
-                    // Continuer avec la redirection par défaut
-                }
-            }
-
-            // Rediriger avec rechargement complet
-            window.location.href = redirectUrl;
+            // Connexion réussie — le middleware se charge de router admin vs agent
+            window.location.href = '/dashboard';
 
         } catch (err) {
             console.error('[LOGIN] Erreur inattendue:', err);
             setError('Une erreur inattendue est survenue. Veuillez réessayer.');
+        } finally {
             setLoading(false);
         }
     };

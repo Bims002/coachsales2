@@ -38,8 +38,9 @@ export async function middleware(request: NextRequest) {
     // Cela rafraîchit la session si nécessaire et évite les loops
     const { data: { user } } = await supabase.auth.getUser();
 
-    const publicRoutes = ['/login', '/register', '/test'];
-    const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname.startsWith(route));
+    const publicRoutes = ['/', '/login', '/register', '/test'];
+    const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname === route)
+        || ['/login', '/register', '/test'].some(route => request.nextUrl.pathname.startsWith(route));
     const isAdminRoute = request.nextUrl.pathname.startsWith('/admin');
 
     // Cas 1: Pas de session et route protégée
@@ -49,27 +50,37 @@ export async function middleware(request: NextRequest) {
 
     // Cas 2: Session présente
     if (user) {
-        // Redirection depuis les pages de login/register
-        if (isPublicRoute) {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .single();
+        // Redirection depuis les pages de login/register (pas la racine /)
+        if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register') {
+            try {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', user.id)
+                    .single();
 
-            const dashboardUrl = profile?.role?.toLowerCase() === 'admin' ? '/admin' : '/dashboard';
-            return NextResponse.redirect(new URL(dashboardUrl, request.url));
+                const dashboardUrl = profile?.role?.toLowerCase() === 'admin' ? '/admin' : '/dashboard';
+                return NextResponse.redirect(new URL(dashboardUrl, request.url));
+            } catch (err) {
+                console.error('[MIDDLEWARE] ❌ Erreur profil (login redirect):', err);
+                return NextResponse.redirect(new URL('/dashboard', request.url));
+            }
         }
 
         // Protection de la zone admin
         if (isAdminRoute) {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .single();
+            try {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', user.id)
+                    .single();
 
-            if (!profile || profile.role?.toLowerCase() !== 'admin') {
+                if (!profile || profile.role?.toLowerCase() !== 'admin') {
+                    return NextResponse.redirect(new URL('/dashboard', request.url));
+                }
+            } catch (err) {
+                console.error('[MIDDLEWARE] ❌ Erreur profil (admin check):', err);
                 return NextResponse.redirect(new URL('/dashboard', request.url));
             }
         }

@@ -25,28 +25,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const supabase = createClient();
 
     const fetchProfile = async (userId: string) => {
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('name, role')
-            .eq('id', userId)
-            .single();
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('name, role')
+                .eq('id', userId)
+                .single();
 
-        if (data) {
-            setProfile(data);
+            if (data) {
+                setProfile(data);
+            } else if (error) {
+                console.warn('[AUTH] ⚠️ Profil non trouvé:', error.message);
+            }
+        } catch (err) {
+            console.error('[AUTH] ❌ Erreur fetchProfile:', err);
         }
     };
 
     useEffect(() => {
+        // ⏱️ Timeout de sécurité: si l'auth n'a pas fini en 8s, on débloque quand même
+        const safetyTimeout = setTimeout(() => {
+            setLoading((current) => {
+                if (current) {
+                    console.warn('[AUTH] ⏱️ Safety timeout: forçage loading=false après 8s');
+                    return false;
+                }
+                return current;
+            });
+        }, 8000);
+
         const initializeAuth = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            setSession(session);
-            setUser(session?.user ?? null);
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                setSession(session);
+                setUser(session?.user ?? null);
 
-            if (session?.user) {
-                await fetchProfile(session.user.id);
+                if (session?.user) {
+                    await fetchProfile(session.user.id);
+                }
+            } catch (err) {
+                console.error('[AUTH] ❌ Erreur initializeAuth:', err);
+            } finally {
+                setLoading(false);
             }
-
-            setLoading(false);
         };
 
         initializeAuth();
@@ -64,7 +85,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setLoading(false);
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            clearTimeout(safetyTimeout);
+            subscription.unsubscribe();
+        };
     }, []);
 
     const isAdmin = profile?.role?.toLowerCase() === 'admin';
