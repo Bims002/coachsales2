@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { LogIn, Loader2, Mail, Lock, Mic } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { createClient } from '@/lib/supabase-browser';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -12,7 +11,6 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const { signIn } = useAuth();
-    const supabase = createClient();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -20,7 +18,7 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            const { error } = await signIn(email, password);
+            const { error, role } = await signIn(email, password);
 
             if (error) {
                 if (error.message?.includes('Email not confirmed')) {
@@ -30,35 +28,16 @@ export default function LoginPage() {
                 } else {
                     setError(error.message || 'Erreur de connexion');
                 }
+                setLoading(false);
                 return;
             }
 
-            // Connexion réussie — déterminer la destination selon le rôle
-            let destination = '/dashboard';
-            try {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (user) {
-                    const { data: profile } = await supabase
-                        .from('profiles')
-                        .select('role')
-                        .eq('id', user.id)
-                        .single();
-
-                    if (profile?.role?.toLowerCase() === 'admin') {
-                        destination = '/admin';
-                    }
-                }
-            } catch (profileErr) {
-                console.warn('[LOGIN] Profil non récupéré, redirection par défaut:', profileErr);
-            }
-
-            // Redirection finale
-            window.location.href = destination;
+            // Redirection selon le rôle retourné par signIn
+            window.location.href = role === 'admin' ? '/admin' : '/dashboard';
 
         } catch (err) {
             console.error('[LOGIN] Erreur inattendue:', err);
-            setError('Une erreur inattendue est survenue. Veuillez réessayer.');
-        } finally {
+            setError('Une erreur inattendue est survenue.');
             setLoading(false);
         }
     };

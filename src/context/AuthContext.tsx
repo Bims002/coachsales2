@@ -10,7 +10,7 @@ interface AuthContextType {
     profile: { name: string; role: string } | null;
     isAdmin: boolean;
     loading: boolean;
-    signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+    signIn: (email: string, password: string) => Promise<{ error: Error | null; role: string | null }>;
     signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
     signOut: () => Promise<void>;
 }
@@ -101,8 +101,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isAdmin = profile?.role?.toLowerCase() === 'admin';
 
     const signIn = async (email: string, password: string) => {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        return { error: error as Error | null };
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error || !data.user) {
+            return { error: error as Error | null, role: null };
+        }
+
+        // Query le profil sur la MÊME instance Supabase (token garanti)
+        let role: string | null = null;
+        try {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', data.user.id)
+                .single();
+            role = profile?.role?.toLowerCase() || null;
+        } catch (err) {
+            console.warn('[AUTH] Profil non trouvé après signIn:', err);
+        }
+
+        return { error: null, role };
     };
 
     const signUp = async (email: string, password: string, fullName: string) => {
