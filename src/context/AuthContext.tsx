@@ -10,7 +10,7 @@ interface AuthContextType {
     profile: { name: string; role: string } | null;
     isAdmin: boolean;
     loading: boolean;
-    signIn: (email: string, password: string) => Promise<{ error: Error | null; role: string | null }>;
+    signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
     signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
     signOut: () => Promise<void>;
 }
@@ -101,37 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isAdmin = profile?.role?.toLowerCase() === 'admin';
 
     const signIn = async (email: string, password: string) => {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error || !data.user || !data.session) {
-            return { error: error as Error | null, role: null };
-        }
-
-        // Fetch REST direct avec le JWT — contourne le client Supabase
-        // Le access_token est garanti valide (vient de signInWithPassword)
-        let role: string | null = null;
-        try {
-            const res = await fetch(
-                `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?id=eq.${data.user.id}&select=role`,
-                {
-                    headers: {
-                        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-                        'Authorization': `Bearer ${data.session.access_token}`,
-                        'Accept': 'application/json',
-                    },
-                }
-            );
-            const profiles = await res.json();
-            if (profiles?.[0]?.role) {
-                role = profiles[0].role.toLowerCase();
-                console.log(`[AUTH] ✅ Rôle détecté via REST: ${role}`);
-            } else {
-                console.warn('[AUTH] ⚠️ Profil vide:', profiles);
-            }
-        } catch (fetchErr) {
-            console.error('[AUTH] ❌ Fetch profil échoué:', fetchErr);
-        }
-
-        return { error: null, role };
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        return { error: error as Error | null };
     };
 
     const signUp = async (email: string, password: string, fullName: string) => {

@@ -27,12 +27,19 @@ export default function AgentDashboard() {
     const [simulations, setSimulations] = useState<Simulation[]>([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
-    const { user, profile, loading: authLoading } = useAuth();
+    const { user, profile, isAdmin, loading: authLoading } = useAuth();
+
+    // Admins → rediriger vers /admin (isAdmin vient d'AuthContext, pas de requête extra)
+    useEffect(() => {
+        if (!authLoading && isAdmin) {
+            window.location.href = '/admin';
+        }
+    }, [authLoading, isAdmin]);
 
     useEffect(() => {
         async function fetchData() {
             if (authLoading) return;
-            if (!user) {
+            if (!user || isAdmin) {
                 setLoading(false);
                 return;
             }
@@ -53,7 +60,7 @@ export default function AgentDashboard() {
             }
         }
         fetchData();
-    }, [user, authLoading]);
+    }, [user, authLoading, isAdmin]);
 
     const avgScore = simulations.length > 0
         ? Math.round(simulations.reduce((acc, s) => acc + s.score, 0) / simulations.length)

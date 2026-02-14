@@ -18,7 +18,7 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            const { error, role } = await signIn(email, password);
+            const { error } = await signIn(email, password);
 
             if (error) {
                 if (error.message?.includes('Email not confirmed')) {
@@ -32,8 +32,9 @@ export default function LoginPage() {
                 return;
             }
 
-            // Redirection selon le rôle retourné par signIn
-            window.location.href = role === 'admin' ? '/admin' : '/dashboard';
+            // Tous les utilisateurs → /dashboard
+            // Le dashboard redirige les admins vers /admin côté client
+            window.location.href = '/dashboard';
 
         } catch (err) {
             console.error('[LOGIN] Erreur inattendue:', err);
