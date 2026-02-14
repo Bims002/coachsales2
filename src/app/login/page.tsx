@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { LogIn, Loader2, Mail, Lock, Mic } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -10,7 +10,15 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { signIn } = useAuth();
+    const [loginSuccess, setLoginSuccess] = useState(false);
+    const { signIn, user, isAdmin, loading: authLoading } = useAuth();
+
+    // Après signIn, attendre que AuthContext charge le profil avant de rediriger
+    useEffect(() => {
+        if (loginSuccess && !authLoading && user) {
+            window.location.href = isAdmin ? '/admin' : '/dashboard';
+        }
+    }, [loginSuccess, authLoading, user, isAdmin]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -32,9 +40,9 @@ export default function LoginPage() {
                 return;
             }
 
-            // Tous les utilisateurs → /dashboard
-            // Le dashboard redirige les admins vers /admin côté client
-            window.location.href = '/dashboard';
+            // Ne PAS rediriger ici — le useEffect ci-dessus gère la redirection
+            // après que AuthContext ait chargé le profil
+            setLoginSuccess(true);
 
         } catch (err) {
             console.error('[LOGIN] Erreur inattendue:', err);
