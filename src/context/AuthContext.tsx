@@ -102,13 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const signIn = async (email: string, password: string) => {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) {
-            return { error: error as Error | null };
-        }
-        // Forcer loading=true pour que le consommateur (login page) attende
-        // que onAuthStateChange charge le profil et remette loading=false
-        setLoading(true);
-        return { error: null };
+        return { error: error as Error | null };
     };
 
     const signUp = async (email: string, password: string, fullName: string) => {

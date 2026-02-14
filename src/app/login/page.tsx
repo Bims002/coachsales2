@@ -11,14 +11,24 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [loginSuccess, setLoginSuccess] = useState(false);
-    const { signIn, user, isAdmin, loading: authLoading } = useAuth();
+    const { signIn, user, profile } = useAuth();
 
-    // Après signIn, attendre que AuthContext charge le profil avant de rediriger
+    // Après signIn, attendre que profile soit chargé pour déterminer le rôle
     useEffect(() => {
-        if (loginSuccess && !authLoading && user) {
+        if (loginSuccess && user && profile) {
+            const isAdmin = profile.role?.toLowerCase() === 'admin';
             window.location.href = isAdmin ? '/admin' : '/dashboard';
         }
-    }, [loginSuccess, authLoading, user, isAdmin]);
+    }, [loginSuccess, user, profile]);
+
+    // Timeout de sécurité : si le profil ne charge pas en 3s, aller au dashboard
+    useEffect(() => {
+        if (!loginSuccess) return;
+        const timeout = setTimeout(() => {
+            window.location.href = '/dashboard';
+        }, 3000);
+        return () => clearTimeout(timeout);
+    }, [loginSuccess]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
