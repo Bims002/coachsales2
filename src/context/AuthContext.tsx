@@ -106,17 +106,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return { error: error as Error | null, role: null };
         }
 
-        // Query le profil sur la MÊME instance Supabase (token garanti)
+        // Query le profil avec retry — même instance Supabase (token garanti)
         let role: string | null = null;
-        try {
-            const { data: profile } = await supabase
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const { data: profile, error: profileError } = await supabase
                 .from('profiles')
                 .select('role')
                 .eq('id', data.user.id)
                 .single();
-            role = profile?.role?.toLowerCase() || null;
-        } catch (err) {
-            console.warn('[AUTH] Profil non trouvé après signIn:', err);
+
+            if (profile?.role) {
+                role = profile.role.toLowerCase();
+                console.log(`[AUTH] ✅ Rôle détecté: ${role} (tentative ${attempt + 1})`);
+                break;
+            }
+
+            // Log l'erreur pour debug
+            console.warn(`[AUTH] ⚠️ Profil non trouvé (tentative ${attempt + 1}):`, profileError?.message || 'data null');
+
+            // Attendre 300ms avant retry
+            if (attempt === 0) {
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
         }
 
         return { error: null, role };
