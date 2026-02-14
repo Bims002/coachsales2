@@ -58,7 +58,7 @@ export default function AdminPage() {
 
                 const totalSimulations = simsRes.count || 0;
                 const avgScore = simsRes.data && simsRes.data.length > 0
-                    ? Math.round(simsRes.data.reduce((acc, s) => acc + s.score, 0) / simsRes.data.length)
+                    ? Math.round(simsRes.data.reduce((acc: number, s: any) => acc + s.score, 0) / simsRes.data.length)
                     : 0;
 
                 setStats({
