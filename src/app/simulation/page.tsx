@@ -399,7 +399,7 @@ export default function SimulationPage() {
             const data = await res.json();
             if (data.success) {
                 console.log('--- [CLIENT] ✅ Score calculé, redirection vers:', `/results/${data.simulationId}`);
-                window.location.href = `/results/${data.simulationId}`;
+                router.push(`/results/${data.simulationId}`);
             } else {
                 throw new Error(data.error || 'Erreur lors du scoring');
             }

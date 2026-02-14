@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Users, Play, TrendingUp, Package, Loader2, Award, Clock, ShieldCheck, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase-browser';
@@ -23,6 +24,7 @@ interface RecentSimulation {
 }
 
 export default function AdminPage() {
+    const router = useRouter();
     const [stats, setStats] = useState<GlobalStats>({
         totalAgents: 0,
         totalSimulations: 0,
@@ -37,9 +39,9 @@ export default function AdminPage() {
     // Protection côté client : si pas admin → rediriger vers /dashboard
     useEffect(() => {
         if (!authLoading && user && !isAdmin) {
-            window.location.href = '/dashboard';
+            router.push('/dashboard');
         }
-    }, [authLoading, user, isAdmin]);
+    }, [authLoading, user, isAdmin, router]);
 
     useEffect(() => {
         async function fetchAdminData() {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Play, History, TrendingUp, Star, Loader2, ArrowRight, Target } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase-browser';
@@ -27,12 +28,13 @@ export default function AgentDashboard() {
     const [simulations, setSimulations] = useState<Simulation[]>([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
+    const router = useRouter();
     const { user, profile, isAdmin, loading: authLoading } = useAuth();
 
     // Admins → rediriger vers /admin (isAdmin vient d'AuthContext, pas de requête extra)
     useEffect(() => {
         if (!authLoading && isAdmin) {
-            window.location.href = '/admin';
+            router.push('/admin');
         }
     }, [authLoading, isAdmin]);
 

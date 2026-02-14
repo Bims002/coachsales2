@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { LogIn, Loader2, Mail, Lock, Mic } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
+    const router = useRouter();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -17,7 +19,7 @@ export default function LoginPage() {
     useEffect(() => {
         if (loginSuccess && user && profile) {
             const isAdmin = profile.role?.toLowerCase() === 'admin';
-            window.location.href = isAdmin ? '/admin' : '/dashboard';
+            router.push(isAdmin ? '/admin' : '/dashboard');
         }
     }, [loginSuccess, user, profile]);
 
@@ -25,7 +27,7 @@ export default function LoginPage() {
     useEffect(() => {
         if (!loginSuccess) return;
         const timeout = setTimeout(() => {
-            window.location.href = '/dashboard';
+            router.push('/dashboard');
         }, 3000);
         return () => clearTimeout(timeout);
     }, [loginSuccess]);
