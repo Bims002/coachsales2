@@ -35,48 +35,63 @@ export async function middleware(request: NextRequest) {
     );
 
     // IMPORTANT: Utiliser getUser() au lieu de getSession() pour Vercel/Edge
-    // Cela rafraîchit la session si nécessaire et évite les loops
     const { data: { user } } = await supabase.auth.getUser();
 
     const publicRoutes = ['/', '/login', '/register', '/test'];
     const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname === route)
         || ['/login', '/register', '/test'].some(route => request.nextUrl.pathname.startsWith(route));
     const isAdminRoute = request.nextUrl.pathname.startsWith('/admin');
+    const isDashboard = request.nextUrl.pathname === '/dashboard';
 
-    // Cas 1: Pas de session et route protégée
+    // Cas 1: Pas de session et route protégée → redirection vers login
     if (!user && !isPublicRoute) {
         return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // Cas 2: Session présente
+    // Cas 2: Session présente — on ne query le profil QUE quand c'est nécessaire
     if (user) {
-        // Récupérer le profil une seule fois pour toutes les vérifications
-        let userRole: string | null = null;
-        try {
-            const { data: profile } = await supabase
+        // On a besoin du rôle uniquement pour : login/register, /dashboard, /admin/*
+        const needsRoleCheck = request.nextUrl.pathname === '/login'
+            || request.nextUrl.pathname === '/register'
+            || isDashboard
+            || isAdminRoute;
+
+        if (needsRoleCheck) {
+            // Récupérer le rôle
+            const { data: profile, error: profileError } = await supabase
                 .from('profiles')
                 .select('role')
                 .eq('id', user.id)
                 .single();
-            userRole = profile?.role?.toLowerCase() || null;
-        } catch (err) {
-            console.error('[MIDDLEWARE] ❌ Erreur profil:', err);
-        }
 
-        // Redirection depuis les pages de login/register
-        if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register') {
-            const dashboardUrl = userRole === 'admin' ? '/admin' : '/dashboard';
-            return NextResponse.redirect(new URL(dashboardUrl, request.url));
-        }
+            // Si erreur de profil → on laisse passer (pas de boucle)
+            if (profileError || !profile) {
+                console.error('[MIDDLEWARE] ⚠️ Profil introuvable, on laisse passer:', profileError?.message);
+                // Depuis login → aller au dashboard par défaut
+                if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register') {
+                    return NextResponse.redirect(new URL('/dashboard', request.url));
+                }
+                // Pour toute autre page → on laisse passer sans redirection
+                return response;
+            }
 
-        // Si un admin atterrit sur /dashboard, le rediriger vers /admin
-        if (request.nextUrl.pathname === '/dashboard' && userRole === 'admin') {
-            return NextResponse.redirect(new URL('/admin', request.url));
-        }
+            const userRole = profile.role?.toLowerCase();
 
-        // Protection de la zone admin : seuls les admins y accèdent
-        if (isAdminRoute && userRole !== 'admin') {
-            return NextResponse.redirect(new URL('/dashboard', request.url));
+            // Depuis login/register → rediriger vers le bon dashboard
+            if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register') {
+                const url = userRole === 'admin' ? '/admin' : '/dashboard';
+                return NextResponse.redirect(new URL(url, request.url));
+            }
+
+            // Admin sur /dashboard → rediriger vers /admin
+            if (isDashboard && userRole === 'admin') {
+                return NextResponse.redirect(new URL('/admin', request.url));
+            }
+
+            // Non-admin sur /admin/* → rediriger vers /dashboard
+            if (isAdminRoute && userRole !== 'admin') {
+                return NextResponse.redirect(new URL('/dashboard', request.url));
+            }
         }
     }
 

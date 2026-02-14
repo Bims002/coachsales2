@@ -43,25 +43,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     useEffect(() => {
-        // ⏱️ Timeout de sécurité: si l'auth n'a pas fini en 8s, on débloque quand même
+        // ⏱️ Timeout de sécurité: si l'auth n'a pas fini en 5s, on débloque quand même
         const safetyTimeout = setTimeout(() => {
             setLoading((current) => {
                 if (current) {
-                    console.warn('[AUTH] ⏱️ Safety timeout: forçage loading=false après 8s');
+                    console.warn('[AUTH] ⏱️ Safety timeout: forçage loading=false après 5s');
                     return false;
                 }
                 return current;
             });
-        }, 8000);
+        }, 5000);
 
         const initializeAuth = async () => {
             try {
-                const { data: { session } } = await supabase.auth.getSession();
-                setSession(session);
-                setUser(session?.user ?? null);
+                // Utiliser getUser() pour être cohérent avec le middleware
+                // getUser() rafraîchit le token, getSession() peut retourner un token expiré
+                const { data: { user } } = await supabase.auth.getUser();
 
-                if (session?.user) {
-                    await fetchProfile(session.user.id);
+                if (user) {
+                    // Récupérer aussi la session pour la stocker
+                    const { data: { session } } = await supabase.auth.getSession();
+                    setSession(session);
+                    setUser(user);
+                    await fetchProfile(user.id);
+                } else {
+                    setSession(null);
+                    setUser(null);
                 }
             } catch (err) {
                 console.error('[AUTH] ❌ Erreur initializeAuth:', err);
