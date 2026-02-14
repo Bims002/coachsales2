@@ -50,39 +50,33 @@ export async function middleware(request: NextRequest) {
 
     // Cas 2: Session présente
     if (user) {
-        // Redirection depuis les pages de login/register (pas la racine /)
-        if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register') {
-            try {
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('role')
-                    .eq('id', user.id)
-                    .single();
-
-                const dashboardUrl = profile?.role?.toLowerCase() === 'admin' ? '/admin' : '/dashboard';
-                return NextResponse.redirect(new URL(dashboardUrl, request.url));
-            } catch (err) {
-                console.error('[MIDDLEWARE] ❌ Erreur profil (login redirect):', err);
-                return NextResponse.redirect(new URL('/dashboard', request.url));
-            }
+        // Récupérer le profil une seule fois pour toutes les vérifications
+        let userRole: string | null = null;
+        try {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+            userRole = profile?.role?.toLowerCase() || null;
+        } catch (err) {
+            console.error('[MIDDLEWARE] ❌ Erreur profil:', err);
         }
 
-        // Protection de la zone admin
-        if (isAdminRoute) {
-            try {
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('role')
-                    .eq('id', user.id)
-                    .single();
+        // Redirection depuis les pages de login/register
+        if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register') {
+            const dashboardUrl = userRole === 'admin' ? '/admin' : '/dashboard';
+            return NextResponse.redirect(new URL(dashboardUrl, request.url));
+        }
 
-                if (!profile || profile.role?.toLowerCase() !== 'admin') {
-                    return NextResponse.redirect(new URL('/dashboard', request.url));
-                }
-            } catch (err) {
-                console.error('[MIDDLEWARE] ❌ Erreur profil (admin check):', err);
-                return NextResponse.redirect(new URL('/dashboard', request.url));
-            }
+        // Si un admin atterrit sur /dashboard, le rediriger vers /admin
+        if (request.nextUrl.pathname === '/dashboard' && userRole === 'admin') {
+            return NextResponse.redirect(new URL('/admin', request.url));
+        }
+
+        // Protection de la zone admin : seuls les admins y accèdent
+        if (isAdminRoute && userRole !== 'admin') {
+            return NextResponse.redirect(new URL('/dashboard', request.url));
         }
     }
 
