@@ -41,55 +41,30 @@ export async function middleware(request: NextRequest) {
     const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname === route)
         || ['/login', '/register', '/test'].some(route => request.nextUrl.pathname.startsWith(route));
     const isAdminRoute = request.nextUrl.pathname.startsWith('/admin');
-    const isDashboard = request.nextUrl.pathname === '/dashboard';
 
-    // Cas 1: Pas de session et route protégée → redirection vers login
+    // Cas 1: Pas connecté + route protégée → login
     if (!user && !isPublicRoute) {
         return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // Cas 2: Session présente — on ne query le profil QUE quand c'est nécessaire
+    // Cas 2: Connecté
     if (user) {
-        // On a besoin du rôle uniquement pour : login/register, /dashboard, /admin/*
-        const needsRoleCheck = request.nextUrl.pathname === '/login'
-            || request.nextUrl.pathname === '/register'
-            || isDashboard
-            || isAdminRoute;
+        // Redirection depuis login/register → dashboard (par défaut)
+        // La page dashboard gère la redirection admin côté client
+        if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register') {
+            return NextResponse.redirect(new URL('/dashboard', request.url));
+        }
 
-        if (needsRoleCheck) {
-            // Récupérer le rôle
+        // Protection de la zone admin : vérifier le rôle
+        if (isAdminRoute) {
             const { data: profile, error: profileError } = await supabase
                 .from('profiles')
                 .select('role')
                 .eq('id', user.id)
                 .single();
 
-            // Si erreur de profil → on laisse passer (pas de boucle)
-            if (profileError || !profile) {
-                console.error('[MIDDLEWARE] ⚠️ Profil introuvable, on laisse passer:', profileError?.message);
-                // Depuis login → aller au dashboard par défaut
-                if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register') {
-                    return NextResponse.redirect(new URL('/dashboard', request.url));
-                }
-                // Pour toute autre page → on laisse passer sans redirection
-                return response;
-            }
-
-            const userRole = profile.role?.toLowerCase();
-
-            // Depuis login/register → rediriger vers le bon dashboard
-            if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register') {
-                const url = userRole === 'admin' ? '/admin' : '/dashboard';
-                return NextResponse.redirect(new URL(url, request.url));
-            }
-
-            // Admin sur /dashboard → rediriger vers /admin
-            if (isDashboard && userRole === 'admin') {
-                return NextResponse.redirect(new URL('/admin', request.url));
-            }
-
-            // Non-admin sur /admin/* → rediriger vers /dashboard
-            if (isAdminRoute && userRole !== 'admin') {
+            // Si erreur ou pas admin → dashboard
+            if (profileError || !profile || profile.role?.toLowerCase() !== 'admin') {
                 return NextResponse.redirect(new URL('/dashboard', request.url));
             }
         }
@@ -100,14 +75,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        /*
-         * Match all request paths except:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico (favicon file)
-         * - api routes (API endpoints)
-         * - public files (images, fonts, etc.)
-         */
         '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf|eot)).*)',
     ],
 };
