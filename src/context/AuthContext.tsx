@@ -102,33 +102,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const signIn = async (email: string, password: string) => {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error || !data.user) {
+        if (error || !data.user || !data.session) {
             return { error: error as Error | null, role: null };
         }
 
-        // Query le profil avec retry — même instance Supabase (token garanti)
+        // Fetch REST direct avec le JWT — contourne le client Supabase
+        // Le access_token est garanti valide (vient de signInWithPassword)
         let role: string | null = null;
-
-        for (let attempt = 0; attempt < 2; attempt++) {
-            const { data: profile, error: profileError } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', data.user.id)
-                .single();
-
-            if (profile?.role) {
-                role = profile.role.toLowerCase();
-                console.log(`[AUTH] ✅ Rôle détecté: ${role} (tentative ${attempt + 1})`);
-                break;
+        try {
+            const res = await fetch(
+                `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?id=eq.${data.user.id}&select=role`,
+                {
+                    headers: {
+                        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+                        'Authorization': `Bearer ${data.session.access_token}`,
+                        'Accept': 'application/json',
+                    },
+                }
+            );
+            const profiles = await res.json();
+            if (profiles?.[0]?.role) {
+                role = profiles[0].role.toLowerCase();
+                console.log(`[AUTH] ✅ Rôle détecté via REST: ${role}`);
+            } else {
+                console.warn('[AUTH] ⚠️ Profil vide:', profiles);
             }
-
-            // Log l'erreur pour debug
-            console.warn(`[AUTH] ⚠️ Profil non trouvé (tentative ${attempt + 1}):`, profileError?.message || 'data null');
-
-            // Attendre 300ms avant retry
-            if (attempt === 0) {
-                await new Promise(resolve => setTimeout(resolve, 300));
-            }
+        } catch (fetchErr) {
+            console.error('[AUTH] ❌ Fetch profil échoué:', fetchErr);
         }
 
         return { error: null, role };
