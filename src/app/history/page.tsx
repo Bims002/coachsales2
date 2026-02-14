@@ -24,23 +24,32 @@ export default function HistoryPage() {
     const [simulations, setSimulations] = useState<Simulation[]>([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
 
     useEffect(() => {
         async function fetchHistory() {
-            if (!user) return;
+            if (authLoading) return;
+            if (!user) {
+                setLoading(false);
+                return;
+            }
 
-            const { data, error } = await supabase
-                .from('simulations')
-                .select('id, score, duration_seconds, created_at, products(name)')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false });
+            try {
+                const { data, error } = await supabase
+                    .from('simulations')
+                    .select('id, score, duration_seconds, created_at, products(name)')
+                    .eq('user_id', user.id)
+                    .order('created_at', { ascending: false });
 
-            if (data) setSimulations(data as Simulation[]);
-            setLoading(false);
+                if (data) setSimulations(data as Simulation[]);
+            } catch (err) {
+                console.error('[HISTORY] ❌ Erreur chargement:', err);
+            } finally {
+                setLoading(false);
+            }
         }
         fetchHistory();
-    }, [user]);
+    }, [user, authLoading]);
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);

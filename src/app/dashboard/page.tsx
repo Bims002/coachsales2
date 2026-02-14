@@ -27,24 +27,33 @@ export default function AgentDashboard() {
     const [simulations, setSimulations] = useState<Simulation[]>([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
-    const { user, profile } = useAuth();
+    const { user, profile, loading: authLoading } = useAuth();
 
     useEffect(() => {
         async function fetchData() {
-            if (!user) return;
+            if (authLoading) return;
+            if (!user) {
+                setLoading(false);
+                return;
+            }
 
-            const { data: simData } = await supabase
-                .from('simulations')
-                .select('id, score, created_at, products(name)')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false })
-                .limit(5);
+            try {
+                const { data: simData } = await supabase
+                    .from('simulations')
+                    .select('id, score, created_at, products(name)')
+                    .eq('user_id', user.id)
+                    .order('created_at', { ascending: false })
+                    .limit(5);
 
-            if (simData) setSimulations(simData);
-            setLoading(false);
+                if (simData) setSimulations(simData);
+            } catch (err) {
+                console.error('[DASHBOARD] ❌ Erreur chargement:', err);
+            } finally {
+                setLoading(false);
+            }
         }
         fetchData();
-    }, [user]);
+    }, [user, authLoading]);
 
     const avgScore = simulations.length > 0
         ? Math.round(simulations.reduce((acc, s) => acc + s.score, 0) / simulations.length)

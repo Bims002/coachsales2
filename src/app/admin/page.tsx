@@ -32,41 +32,52 @@ export default function AdminPage() {
     const [recentSims, setRecentSims] = useState<RecentSimulation[]>([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
 
     useEffect(() => {
         async function fetchAdminData() {
-            if (!user) return;
+            // Attendre que l'auth soit terminée
+            if (authLoading) return;
+            // Si pas d'utilisateur après le chargement, arrêter le spinner
+            if (!user) {
+                setLoading(false);
+                return;
+            }
 
-            const [agentsRes, simsRes, productsRes] = await Promise.all([
-                supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'AGENT'),
-                supabase.from('simulations').select('score', { count: 'exact' }),
-                supabase.from('products').select('id', { count: 'exact', head: true })
-            ]);
+            try {
+                const [agentsRes, simsRes, productsRes] = await Promise.all([
+                    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'AGENT'),
+                    supabase.from('simulations').select('score', { count: 'exact' }),
+                    supabase.from('products').select('id', { count: 'exact', head: true })
+                ]);
 
-            const totalSimulations = simsRes.count || 0;
-            const avgScore = simsRes.data && simsRes.data.length > 0
-                ? Math.round(simsRes.data.reduce((acc, s) => acc + s.score, 0) / simsRes.data.length)
-                : 0;
+                const totalSimulations = simsRes.count || 0;
+                const avgScore = simsRes.data && simsRes.data.length > 0
+                    ? Math.round(simsRes.data.reduce((acc, s) => acc + s.score, 0) / simsRes.data.length)
+                    : 0;
 
-            setStats({
-                totalAgents: agentsRes.count || 0,
-                totalSimulations,
-                averageScore: avgScore,
-                totalProducts: productsRes.count || 0
-            });
+                setStats({
+                    totalAgents: agentsRes.count || 0,
+                    totalSimulations,
+                    averageScore: avgScore,
+                    totalProducts: productsRes.count || 0
+                });
 
-            const { data: simData } = await supabase
-                .from('simulations')
-                .select('id, score, created_at, duration_seconds, profiles(name, email), products(name)')
-                .order('created_at', { ascending: false })
-                .limit(5);
+                const { data: simData } = await supabase
+                    .from('simulations')
+                    .select('id, score, created_at, duration_seconds, profiles(name, email), products(name)')
+                    .order('created_at', { ascending: false })
+                    .limit(5);
 
-            if (simData) setRecentSims(simData as RecentSimulation[]);
-            setLoading(false);
+                if (simData) setRecentSims(simData as RecentSimulation[]);
+            } catch (err) {
+                console.error('[ADMIN] ❌ Erreur chargement:', err);
+            } finally {
+                setLoading(false);
+            }
         }
         fetchAdminData();
-    }, [user]);
+    }, [user, authLoading]);
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
