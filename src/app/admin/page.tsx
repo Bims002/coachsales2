@@ -32,14 +32,19 @@ export default function AdminPage() {
     const [recentSims, setRecentSims] = useState<RecentSimulation[]>([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
-    const { user, loading: authLoading } = useAuth();
+    const { user, isAdmin, loading: authLoading } = useAuth();
+
+    // Protection côté client : si pas admin → rediriger vers /dashboard
+    useEffect(() => {
+        if (!authLoading && user && !isAdmin) {
+            window.location.href = '/dashboard';
+        }
+    }, [authLoading, user, isAdmin]);
 
     useEffect(() => {
         async function fetchAdminData() {
-            // Attendre que l'auth soit terminée
             if (authLoading) return;
-            // Si pas d'utilisateur après le chargement, arrêter le spinner
-            if (!user) {
+            if (!user || !isAdmin) {
                 setLoading(false);
                 return;
             }
@@ -77,7 +82,7 @@ export default function AdminPage() {
             }
         }
         fetchAdminData();
-    }, [user, authLoading]);
+    }, [user, authLoading, isAdmin]);
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
