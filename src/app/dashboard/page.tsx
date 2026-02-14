@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { Play, History, TrendingUp, Star, Loader2, ArrowRight, Target } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/context/AuthContext';
 
@@ -28,21 +27,11 @@ export default function AgentDashboard() {
     const [simulations, setSimulations] = useState<Simulation[]>([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
-    const { user, profile, isAdmin, loading: authLoading } = useAuth();
-    const router = useRouter();
-
-    // Si l'utilisateur est admin, rediriger vers /admin côté client
-    useEffect(() => {
-        if (!authLoading && isAdmin) {
-            router.replace('/admin');
-        }
-    }, [authLoading, isAdmin, router]);
+    const { user, profile, loading: authLoading } = useAuth();
 
     useEffect(() => {
         async function fetchData() {
             if (authLoading) return;
-            // Si admin, pas besoin de charger les données agent
-            if (isAdmin) return;
             if (!user) {
                 setLoading(false);
                 return;
@@ -64,7 +53,7 @@ export default function AgentDashboard() {
             }
         }
         fetchData();
-    }, [user, authLoading, isAdmin]);
+    }, [user, authLoading]);
 
     const avgScore = simulations.length > 0
         ? Math.round(simulations.reduce((acc, s) => acc + s.score, 0) / simulations.length)

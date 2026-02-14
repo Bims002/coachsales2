@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { LogIn, Loader2, Mail, Lock, Mic } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { createClient } from '@/lib/supabase-browser';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -11,7 +12,7 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const { signIn } = useAuth();
-
+    const supabase = createClient();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -23,17 +24,36 @@ export default function LoginPage() {
 
             if (error) {
                 if (error.message?.includes('Email not confirmed')) {
-                    setError('Veuillez confirmer votre email avant de vous connecter. Vérifiez votre boîte de réception.');
+                    setError('Veuillez confirmer votre email avant de vous connecter.');
                 } else if (error.message?.includes('Invalid login credentials')) {
-                    setError('Email ou mot de passe incorrect. Vérifiez vos identifiants.');
+                    setError('Email ou mot de passe incorrect.');
                 } else {
                     setError(error.message || 'Erreur de connexion');
                 }
                 return;
             }
 
-            // Connexion réussie — le middleware se charge de router admin vs agent
-            window.location.href = '/dashboard';
+            // Connexion réussie — déterminer la destination selon le rôle
+            let destination = '/dashboard';
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('role')
+                        .eq('id', user.id)
+                        .single();
+
+                    if (profile?.role?.toLowerCase() === 'admin') {
+                        destination = '/admin';
+                    }
+                }
+            } catch (profileErr) {
+                console.warn('[LOGIN] Profil non récupéré, redirection par défaut:', profileErr);
+            }
+
+            // Redirection finale
+            window.location.href = destination;
 
         } catch (err) {
             console.error('[LOGIN] Erreur inattendue:', err);
